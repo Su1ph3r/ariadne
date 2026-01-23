@@ -1,0 +1,120 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ariadne"
+version = "0.1.0"
+description = "AI-powered attack path synthesizer - trace threads through the labyrinth of your attack surface"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    { name = "Security Research" }
+]
+keywords = ["security", "pentesting", "attack-path", "vulnerability", "llm"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+]
+
+dependencies = [
+    "typer>=0.9.0",
+    "rich>=13.0.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "networkx>=3.0",
+    "litellm>=1.0.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
+    "jinja2>=3.1.0",
+    "python-multipart>=0.0.6",
+    "pyyaml>=6.0",
+    "httpx>=0.24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+neo4j = [
+    "neo4j>=5.0.0",
+]
+
+[project.scripts]
+ariadne = "ariadne.cli:app"
+
+[project.entry-points."ariadne.parsers"]
+nmap = "ariadne.parsers.nmap:NmapParser"
+nuclei = "ariadne.parsers.nuclei:NucleiParser"
+bloodhound = "ariadne.parsers.bloodhound:BloodHoundParser"
+nessus = "ariadne.parsers.nessus:NessusParser"
+crackmapexec = "ariadne.parsers.crackmapexec:CrackMapExecParser"
+certipy = "ariadne.parsers.certipy:CertipyParser"
+impacket = "ariadne.parsers.impacket:ImpacketParser"
+masscan = "ariadne.parsers.masscan:MasscanParser"
+pingcastle = "ariadne.parsers.pingcastle:PingCastleParser"
+ldapdomaindump = "ariadne.parsers.ldapdomaindump:LDAPDomainDumpParser"
+testssl = "ariadne.parsers.testssl:TestSSLParser"
+shodan = "ariadne.parsers.shodan:ShodanParser"
+censys = "ariadne.parsers.censys:CensysParser"
+metasploit = "ariadne.parsers.metasploit:MetasploitParser"
+responder = "ariadne.parsers.responder:ResponderParser"
+smbmap = "ariadne.parsers.smbmap:SMBMapParser"
+azurehound = "ariadne.parsers.azurehound:AzureHoundParser"
+openvas = "ariadne.parsers.openvas:OpenVASParser"
+qualys = "ariadne.parsers.qualys:QualysParser"
+enum4linux = "ariadne.parsers.enum4linux:Enum4linuxParser"
+rubeus = "ariadne.parsers.rubeus:RubeusParser"
+mimikatz = "ariadne.parsers.mimikatz:MimikatzParser"
+snaffler = "ariadne.parsers.snaffler:SnafflerParser"
+kerbrute = "ariadne.parsers.kerbrute:KerbruteParser"
+ntlmrelayx = "ariadne.parsers.ntlmrelayx:NtlmrelayxParser"
+rustscan = "ariadne.parsers.rustscan:RustScanParser"
+adrecon = "ariadne.parsers.adrecon:ADReconParser"
+plumhound = "ariadne.parsers.plumhound:PlumHoundParser"
+grouper2 = "ariadne.parsers.grouper2:Grouper2Parser"
+windapsearch = "ariadne.parsers.windapsearch:WindapsearchParser"
+ldeep = "ariadne.parsers.ldeep:LdeepParser"
+mitm6 = "ariadne.parsers.mitm6:Mitm6Parser"
+rpcclient = "ariadne.parsers.rpcclient:RpcclientParser"
+cobaltstrike = "ariadne.parsers.cobaltstrike:CobaltStrikeParser"
+sliver = "ariadne.parsers.sliver:SliverParser"
+havoc = "ariadne.parsers.havoc:HavocParser"
+mythic = "ariadne.parsers.mythic:MythicParser"
+seatbelt = "ariadne.parsers.seatbelt:SeatbeltParser"
+sharpup = "ariadne.parsers.sharpup:SharpUpParser"
+watson = "ariadne.parsers.watson:WatsonParser"
+powerview = "ariadne.parsers.powerview:PowerViewParser"
+amass = "ariadne.parsers.amass:AmassParser"
+subfinder = "ariadne.parsers.subfinder:SubfinderParser"
+httpx = "ariadne.parsers.httpx:HttpxParser"
+eyewitness = "ariadne.parsers.eyewitness:EyeWitnessParser"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ariadne"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

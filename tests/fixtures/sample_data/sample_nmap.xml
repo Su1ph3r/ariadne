@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun>
+<nmaprun scanner="nmap" args="nmap -sV -sC -oX sample_nmap.xml 192.168.1.0/24" start="1700000000" startstr="Wed Nov 15 00:00:00 2023" version="7.94" xmloutputversion="1.05">
+<host starttime="1700000001" endtime="1700000010">
+<status state="up" reason="arp-response"/>
+<address addr="192.168.1.1" addrtype="ipv4"/>
+<address addr="AA:BB:CC:DD:EE:FF" addrtype="mac"/>
+<hostnames>
+<hostname name="gateway.local" type="PTR"/>
+</hostnames>
+<ports>
+<port protocol="tcp" portid="22">
+<state state="open" reason="syn-ack"/>
+<service name="ssh" product="OpenSSH" version="8.9p1" extrainfo="Ubuntu" method="probed" conf="10"/>
+</port>
+<port protocol="tcp" portid="80">
+<state state="open" reason="syn-ack"/>
+<service name="http" product="nginx" version="1.18.0" method="probed" conf="10"/>
+</port>
+<port protocol="tcp" portid="443">
+<state state="open" reason="syn-ack"/>
+<service name="https" product="nginx" version="1.18.0" tunnel="ssl" method="probed" conf="10"/>
+</port>
+</ports>
+</host>
+<host starttime="1700000011" endtime="1700000020">
+<status state="up" reason="arp-response"/>
+<address addr="192.168.1.10" addrtype="ipv4"/>
+<hostnames>
+<hostname name="dc01.corp.local" type="PTR"/>
+</hostnames>
+<ports>
+<port protocol="tcp" portid="53">
+<state state="open" reason="syn-ack"/>
+<service name="domain" product="Microsoft DNS" method="probed" conf="10"/>
+</port>
+<port protocol="tcp" portid="88">
+<state state="open" reason="syn-ack"/>
+<service name="kerberos-sec" product="Microsoft Windows Kerberos" method="probed" conf="10"/>
+</port>
+<port protocol="tcp" portid="389">
+<state state="open" reason="syn-ack"/>
+<service name="ldap" product="Microsoft Windows Active Directory LDAP" method="probed" conf="10"/>
+</port>
+<port protocol="tcp" portid="445">
+<state state="open" reason="syn-ack"/>
+<service name="microsoft-ds" product="Microsoft Windows Server 2019" method="probed" conf="10"/>
+</port>
+<port protocol="tcp" portid="3389">
+<state state="open" reason="syn-ack"/>
+<service name="ms-wbt-server" product="Microsoft Terminal Services" method="probed" conf="10"/>
+</port>
+</ports>
+<os>
+<osmatch name="Microsoft Windows Server 2019" accuracy="95"/>
+</os>
+</host>
+<host starttime="1700000021" endtime="1700000030">
+<status state="up" reason="arp-response"/>
+<address addr="192.168.1.20" addrtype="ipv4"/>
+<hostnames>
+<hostname name="web01.corp.local" type="PTR"/>
+</hostnames>
+<ports>
+<port protocol="tcp" portid="80">
+<state state="open" reason="syn-ack"/>
+<service name="http" product="Apache httpd" version="2.4.52" method="probed" conf="10"/>
+<script id="http-vuln-cve2021-41773" output="VULNERABLE: Path Traversal in Apache HTTP Server 2.4.49/2.4.50"/>
+</port>
+<port protocol="tcp" portid="443">
+<state state="open" reason="syn-ack"/>
+<service name="https" product="Apache httpd" version="2.4.52" tunnel="ssl" method="probed" conf="10"/>
+</port>
+<port protocol="tcp" portid="3306">
+<state state="open" reason="syn-ack"/>
+<service name="mysql" product="MySQL" version="8.0.28" method="probed" conf="10"/>
+</port>
+</ports>
+</host>
+<runstats>
+<finished time="1700000100" timestr="Wed Nov 15 00:01:40 2023" summary="Nmap done at Wed Nov 15 00:01:40 2023; 3 hosts up" elapsed="100" exit="success"/>
+<hosts up="3" down="253" total="256"/>
+</runstats>
+</nmaprun>

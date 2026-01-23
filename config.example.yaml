@@ -1,0 +1,82 @@
+# Ariadne Configuration
+# Copy this file to config.yaml and customize
+
+# LLM Configuration
+llm:
+  # Provider: openai, anthropic, ollama, lm_studio
+  provider: anthropic
+
+  # Model name (will be prefixed with provider for LiteLLM)
+  model: claude-sonnet-4-20250514
+
+  # API key - use environment variable substitution
+  api_key: ${ANTHROPIC_API_KEY}
+
+  # Custom base URL (for LM Studio or self-hosted)
+  # base_url: http://localhost:1234/v1
+
+  # Generation parameters
+  temperature: 0.7
+  max_tokens: 4096
+
+# Attack Path Scoring
+scoring:
+  weights:
+    # CVSS score of vulnerabilities in path
+    cvss: 0.3
+
+    # Exploit availability (ExploitDB, Metasploit)
+    exploit_available: 0.25
+
+    # Network position (external entry = higher score)
+    network_position: 0.2
+
+    # Privilege requirements (lower priv = higher score)
+    privilege_required: 0.15
+
+    # Detection likelihood (lower detection = higher score)
+    detection_likelihood: 0.1
+
+  # Minimum path score to include
+  min_path_score: 0.1
+
+  # Maximum path length to consider
+  max_path_length: 10
+
+# Parser Configuration
+parsers:
+  # Enable/disable specific parsers
+  enabled:
+    - nmap
+    - nuclei
+    - bloodhound
+    - aws_scout
+    - azure_enum
+
+  # Additional directories to search for custom parsers
+  custom_paths: []
+
+  # Auto-detect file types
+  auto_detect: true
+
+# Output Configuration
+output:
+  # Default output format: json, html
+  default_format: html
+
+  # Include raw findings in reports
+  include_raw_findings: false
+
+  # Maximum attack paths to include
+  max_paths: 20
+
+  # Custom template directory (optional)
+  # template_dir: ./templates
+
+# Web Dashboard Configuration
+web:
+  host: 127.0.0.1
+  port: 8443
+  debug: false
+  cors_origins:
+    - http://localhost:8443

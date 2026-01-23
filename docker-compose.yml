@@ -1,0 +1,33 @@
+version: "3.8"
+
+services:
+  ariadne:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ariadne
+    ports:
+      - "8443:8443"
+    volumes:
+      # Persist session data and configuration
+      - ariadne_data:/home/ariadne/.ariadne
+      # Mount local scan data (read-only)
+      - ./data:/app/data:ro
+    environment:
+      - ARIADNE_WEB__PERSISTENT_SESSIONS=true
+      - ARIADNE_WEB__SESSION_TTL_HOURS=72
+      # LLM Configuration (uncomment and set as needed)
+      # - ARIADNE_LLM__PROVIDER=anthropic
+      # - ARIADNE_LLM__MODEL=claude-sonnet-4-20250514
+      # - ARIADNE_LLM__API_KEY=${ANTHROPIC_API_KEY}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8443/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  ariadne_data:
+    driver: local

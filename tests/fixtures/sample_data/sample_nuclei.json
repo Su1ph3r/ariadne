@@ -1,0 +1,61 @@
+[
+  {
+    "template-id": "apache-path-traversal",
+    "info": {
+      "name": "Apache HTTP Server Path Traversal",
+      "severity": "critical",
+      "description": "A flaw was found in Apache HTTP Server 2.4.49 and 2.4.50. Path traversal and remote code execution vulnerability.",
+      "tags": ["cve", "apache", "rce", "CVE-2021-41773"],
+      "classification": {
+        "cvss-score": 9.8
+      },
+      "reference": [
+        "https://nvd.nist.gov/vuln/detail/CVE-2021-41773"
+      ]
+    },
+    "host": "http://192.168.1.20",
+    "ip": "192.168.1.20",
+    "matched-at": "http://192.168.1.20/cgi-bin/.%2e/.%2e/.%2e/.%2e/etc/passwd",
+    "timestamp": "2023-11-15T00:05:00Z"
+  },
+  {
+    "template-id": "mysql-default-credentials",
+    "info": {
+      "name": "MySQL Default Credentials",
+      "severity": "high",
+      "description": "MySQL server is using default credentials.",
+      "tags": ["mysql", "default-login", "misconfig"]
+    },
+    "host": "192.168.1.20:3306",
+    "ip": "192.168.1.20",
+    "matched-at": "192.168.1.20:3306",
+    "timestamp": "2023-11-15T00:06:00Z"
+  },
+  {
+    "template-id": "smb-signing-disabled",
+    "info": {
+      "name": "SMB Signing Not Required",
+      "severity": "medium",
+      "description": "SMB signing is not required on the target system, which could allow relay attacks.",
+      "tags": ["smb", "misconfig", "ntlm-relay"]
+    },
+    "host": "192.168.1.10",
+    "ip": "192.168.1.10",
+    "matched-at": "192.168.1.10:445",
+    "timestamp": "2023-11-15T00:07:00Z"
+  },
+  {
+    "template-id": "rdp-ntlm-info",
+    "info": {
+      "name": "RDP NTLM Information Disclosure",
+      "severity": "info",
+      "description": "RDP service exposes NTLM information including domain and hostname.",
+      "tags": ["rdp", "info", "ntlm"]
+    },
+    "host": "192.168.1.10",
+    "ip": "192.168.1.10",
+    "matched-at": "192.168.1.10:3389",
+    "extracted-results": ["CORP", "DC01"],
+    "timestamp": "2023-11-15T00:08:00Z"
+  }
+]
