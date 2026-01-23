@@ -1,7 +1,7 @@
 # Ariadne - Attack Path Synthesizer
 # Multi-stage build for smaller image size
 
-FROM python:3.12-slim as builder
+FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
@@ -11,10 +11,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libffi-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-COPY pyproject.toml ./
+# Copy files needed for building
+COPY pyproject.toml README.md ./
+COPY src/ ./src/
+
+# Build wheel
 RUN pip install --no-cache-dir build && \
-    pip wheel --no-cache-dir --wheel-dir /app/wheels -e ".[dev]"
+    python -m build --wheel --outdir /app/wheels
 
 # Production image
 FROM python:3.12-slim
@@ -26,13 +29,10 @@ RUN useradd --create-home --shell /bin/bash ariadne && \
     mkdir -p /app/data /home/ariadne/.ariadne && \
     chown -R ariadne:ariadne /app /home/ariadne/.ariadne
 
-# Copy wheels from builder
-COPY --from=builder /app/wheels /app/wheels
-
-# Install the application
-COPY . .
-RUN pip install --no-cache-dir --no-index --find-links=/app/wheels -e . && \
-    rm -rf /app/wheels
+# Copy wheel from builder and install
+COPY --from=builder /app/wheels/*.whl /tmp/
+RUN pip install --no-cache-dir /tmp/*.whl && \
+    rm -rf /tmp/*.whl
 
 # Switch to non-root user
 USER ariadne
