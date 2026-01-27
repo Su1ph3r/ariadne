@@ -7,6 +7,7 @@ class AriadneGraph {
     constructor(containerId) {
         this.container = document.getElementById(containerId);
         this.cy = null;
+        this.pagination = null;
     }
 
     async init() {
@@ -92,14 +93,100 @@ class AriadneGraph {
         ];
     }
 
-    async loadData(sessionId) {
+    /**
+     * Load graph data with optional pagination and filtering.
+     *
+     * @param {string} sessionId - The session identifier
+     * @param {Object} options - Optional parameters
+     * @param {number} options.offset - Number of nodes to skip (default: 0)
+     * @param {number} options.limit - Maximum nodes to return (default: 500)
+     * @param {string} options.nodeType - Filter by node type (optional)
+     * @returns {Promise<Object>} Pagination metadata
+     */
+    async loadData(sessionId, options = {}) {
+        const { offset = 0, limit = 500, nodeType = null } = options;
+
         try {
-            const response = await fetch('/api/graph/' + sessionId + '/visualization');
+            const params = new URLSearchParams();
+            params.append('offset', offset.toString());
+            params.append('limit', limit.toString());
+            if (nodeType) {
+                params.append('node_type', nodeType);
+            }
+
+            const response = await fetch(
+                '/api/graph/' + sessionId + '/visualization?' + params.toString()
+            );
             const data = await response.json();
+
             this.setData(data.elements);
+            this.pagination = data.pagination || null;
+
+            return this.pagination;
         } catch (error) {
             console.error('Failed to load graph data:', error);
+            return null;
         }
+    }
+
+    /**
+     * Load more nodes (append to existing graph).
+     *
+     * @param {string} sessionId - The session identifier
+     * @param {Object} options - Optional parameters
+     * @returns {Promise<Object>} Pagination metadata
+     */
+    async loadMore(sessionId, options = {}) {
+        if (!this.pagination || !this.pagination.has_more) {
+            return this.pagination;
+        }
+
+        const nextOffset = this.pagination.offset + this.pagination.limit;
+        const { limit = this.pagination.limit, nodeType = null } = options;
+
+        try {
+            const params = new URLSearchParams();
+            params.append('offset', nextOffset.toString());
+            params.append('limit', limit.toString());
+            if (nodeType) {
+                params.append('node_type', nodeType);
+            }
+
+            const response = await fetch(
+                '/api/graph/' + sessionId + '/visualization?' + params.toString()
+            );
+            const data = await response.json();
+
+            // Append new elements instead of replacing
+            if (this.cy) {
+                this.cy.add(data.elements.nodes || []);
+                this.cy.add(data.elements.edges || []);
+
+                // Re-run layout to incorporate new nodes
+                this.cy.layout({
+                    name: 'cose',
+                    animate: true,
+                    randomize: false,
+                    nodeDimensionsIncludeLabels: true,
+                    fit: false,
+                }).run();
+            }
+
+            this.pagination = data.pagination || null;
+            return this.pagination;
+        } catch (error) {
+            console.error('Failed to load more graph data:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Get current pagination state.
+     *
+     * @returns {Object|null} Pagination metadata or null
+     */
+    getPagination() {
+        return this.pagination;
     }
 
     setData(elements) {
@@ -141,6 +228,7 @@ class AriadneGraph {
             this.cy.destroy();
             this.cy = null;
         }
+        this.pagination = null;
     }
 }
 

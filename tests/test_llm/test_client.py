@@ -4,7 +4,7 @@ import json
 import pytest
 from unittest.mock import MagicMock, patch
 
-from ariadne.llm.client import LLMClient
+from ariadne.llm.client import LLMClient, LLMError
 from ariadne.config import AriadneConfig, LLMConfig
 
 
@@ -111,6 +111,9 @@ class TestCompletionKwargs:
         config.llm.max_tokens = 4096
         config.llm.api_key = None
         config.llm.base_url = None
+        config.llm.timeout = 60
+        config.llm.max_retries = 3
+        config.llm.retry_delay = 1.0
         return LLMClient(config=config)
 
     def test_basic_kwargs(self, client_with_config):
@@ -166,6 +169,9 @@ class TestComplete:
         config.llm.max_tokens = 4096
         config.llm.api_key = "test-key"
         config.llm.base_url = None
+        config.llm.timeout = 60
+        config.llm.max_retries = 3
+        config.llm.retry_delay = 1.0
         return LLMClient(config=config)
 
     def test_complete_basic(self, client_with_config, mock_litellm):
@@ -232,6 +238,9 @@ class TestCompleteJson:
         config.llm.max_tokens = 4096
         config.llm.api_key = "test-key"
         config.llm.base_url = None
+        config.llm.timeout = 60
+        config.llm.max_retries = 3
+        config.llm.retry_delay = 1.0
         return LLMClient(config=config)
 
     def test_complete_json_parses_response(self, client_with_config, mock_litellm):
@@ -303,6 +312,9 @@ class TestTestConnection:
         config.llm.max_tokens = 4096
         config.llm.api_key = "test-key"
         config.llm.base_url = None
+        config.llm.timeout = 60
+        config.llm.max_retries = 3
+        config.llm.retry_delay = 1.0
         return LLMClient(config=config)
 
     def test_connection_success(self, client_with_config):
@@ -341,16 +353,19 @@ class TestErrorHandling:
         config.llm.max_tokens = 4096
         config.llm.api_key = "test-key"
         config.llm.base_url = None
+        config.llm.timeout = 60
+        config.llm.max_retries = 0  # No retries for faster test
+        config.llm.retry_delay = 0.1
         return LLMClient(config=config)
 
     def test_complete_raises_on_litellm_error(self, client_with_config):
-        """Test complete raises RuntimeError on LiteLLM error."""
+        """Test complete raises LLMError on LiteLLM error."""
         with patch.dict("sys.modules", {"litellm": MagicMock()}) as mock_modules:
             import sys
             mock = sys.modules["litellm"]
             mock.completion.side_effect = Exception("API Error")
 
-            with pytest.raises(RuntimeError) as excinfo:
+            with pytest.raises(LLMError) as excinfo:
                 client_with_config.complete("Hello")
 
             assert "LLM completion failed" in str(excinfo.value)

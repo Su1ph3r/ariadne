@@ -120,7 +120,7 @@ def web(
     """Start the Ariadne web dashboard."""
     import uvicorn
 
-    console.print(f"[bold cyan]Ariadne[/] Web Dashboard")
+    console.print("[bold cyan]Ariadne[/] Web Dashboard")
     console.print(f"[green]Starting server at[/] http://{host}:{port}")
 
     uvicorn.run(
@@ -142,13 +142,11 @@ def export(
     ] = "json",
 ) -> None:
     """Export the knowledge graph to various formats."""
-    from ariadne.config import load_config
     from ariadne.graph.store import GraphStore
     from ariadne.parsers.registry import ParserRegistry
 
     console.print(f"[bold cyan]Ariadne[/] - Exporting graph from {input_path}")
 
-    cfg = load_config()
     registry = ParserRegistry()
     store = GraphStore()
 

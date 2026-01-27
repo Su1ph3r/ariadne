@@ -28,6 +28,11 @@ class GraphStore:
             self._graph = self._builder.build()
         return self._graph
 
+    @property
+    def builder(self) -> GraphBuilder:
+        """Get the underlying graph builder."""
+        return self._builder
+
     def add_entity(self, entity: Entity) -> None:
         """Add an entity to the graph."""
         self._builder.add_entity(entity)
@@ -46,6 +51,17 @@ class GraphStore:
     def stats(self) -> dict:
         """Get graph statistics."""
         return self._builder.stats()
+
+    def get_entity_data(self, node_id: str) -> dict[str, Any] | None:
+        """Get full entity data for a node.
+
+        Args:
+            node_id: The node identifier
+
+        Returns:
+            Dictionary of entity data, or None if not found
+        """
+        return self._builder.get_entity_data(node_id)
 
     def export(self, output_path: Path, format: str = "json") -> Path:
         """Export the graph to various formats.
@@ -75,9 +91,13 @@ class GraphStore:
 
         data = nx.node_link_data(self.graph)
 
+        # Enrich nodes with full entity data from builder
         for node in data["nodes"]:
-            if "data" in node:
-                node["data"] = self._serialize_node_data(node["data"])
+            node_id = node.get("id")
+            if node_id:
+                entity_data = self._builder.get_entity_data(node_id)
+                if entity_data:
+                    node["data"] = entity_data
 
         with open(output_file, "w") as f:
             json.dump(data, f, indent=2, default=str)
@@ -91,9 +111,10 @@ class GraphStore:
         export_graph = self.graph.copy()
         for node in export_graph.nodes():
             data = export_graph.nodes[node]
-            if "data" in data:
-                data["data_json"] = json.dumps(data["data"], default=str)
-                del data["data"]
+            # Add entity data for export
+            entity_data = self._builder.get_entity_data(node)
+            if entity_data:
+                data["data_json"] = json.dumps(entity_data, default=str)
             for key, value in list(data.items()):
                 if isinstance(value, (dict, list)):
                     data[key] = json.dumps(value, default=str)
@@ -171,12 +192,6 @@ class GraphStore:
 
         nx.write_gexf(export_graph, output_file)
         return output_file
-
-    def _serialize_node_data(self, data: Any) -> Any:
-        """Serialize node data for JSON export."""
-        if hasattr(data, "model_dump"):
-            return data.model_dump()
-        return data
 
     def load_json(self, input_path: Path) -> None:
         """Load a graph from JSON format."""

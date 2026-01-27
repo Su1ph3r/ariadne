@@ -1,6 +1,6 @@
 """Graph builder for constructing the knowledge graph from parsed entities."""
 
-from typing import Iterator, Union
+from typing import Any, Iterator, Union
 
 import networkx as nx
 
@@ -12,7 +12,11 @@ Entity = Union[Asset, Finding, Relationship]
 
 
 class GraphBuilder:
-    """Builds a NetworkX graph from parsed security entities."""
+    """Builds a NetworkX graph from parsed security entities.
+
+    Entity data is stored in separate dictionaries to reduce memory usage.
+    Use get_entity_data() to retrieve full entity data on demand.
+    """
 
     def __init__(self) -> None:
         self.graph: nx.DiGraph = nx.DiGraph()
@@ -53,7 +57,6 @@ class GraphBuilder:
             hostname=host.hostname,
             os=host.os,
             is_dc=host.is_dc,
-            data=host.model_dump(),
         )
 
     def _add_service(self, service: Service) -> None:
@@ -67,7 +70,6 @@ class GraphBuilder:
             protocol=service.protocol,
             product=service.product,
             version=service.version,
-            data=service.model_dump(),
         )
 
         if service.host_id and service.host_id in self._hosts:
@@ -89,7 +91,6 @@ class GraphBuilder:
             domain=user.domain,
             is_admin=user.is_admin,
             enabled=user.enabled,
-            data=user.model_dump(),
         )
 
     def _add_cloud_resource(self, resource: CloudResource) -> None:
@@ -102,7 +103,6 @@ class GraphBuilder:
             resource_type=resource.resource_type,
             provider=resource.provider,
             region=resource.region,
-            data=resource.model_dump(),
         )
 
     def _add_finding(self, finding: Finding) -> None:
@@ -119,7 +119,6 @@ class GraphBuilder:
             label=finding.title,
             severity=finding.severity,
             severity_score=finding.severity_score,
-            data=finding.model_dump(),
         )
 
         if finding.affected_asset_id:
@@ -158,6 +157,51 @@ class GraphBuilder:
                 confidence=rel.confidence,
                 properties=rel.properties,
             )
+
+    def get_entity_data(self, node_id: str) -> dict[str, Any] | None:
+        """Get full entity data for a node.
+
+        This method retrieves the complete Pydantic model data for a node,
+        allowing on-demand access without storing all data in the graph.
+
+        Args:
+            node_id: The node identifier
+
+        Returns:
+            Dictionary of entity data, or None if not found
+        """
+        if node_id in self._hosts:
+            return self._hosts[node_id].model_dump()
+        if node_id in self._services:
+            return self._services[node_id].model_dump()
+        if node_id in self._users:
+            return self._users[node_id].model_dump()
+        if node_id in self._cloud_resources:
+            return self._cloud_resources[node_id].model_dump()
+        if node_id in self._findings:
+            return self._findings[node_id].model_dump()
+        return None
+
+    def get_entity(self, node_id: str) -> Entity | None:
+        """Get the original entity object for a node.
+
+        Args:
+            node_id: The node identifier
+
+        Returns:
+            The entity object, or None if not found
+        """
+        if node_id in self._hosts:
+            return self._hosts[node_id]
+        if node_id in self._services:
+            return self._services[node_id]
+        if node_id in self._users:
+            return self._users[node_id]
+        if node_id in self._cloud_resources:
+            return self._cloud_resources[node_id]
+        if node_id in self._findings:
+            return self._findings[node_id]
+        return None
 
     def build(self) -> nx.DiGraph:
         """Return the built graph."""

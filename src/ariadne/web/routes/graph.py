@@ -3,7 +3,6 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from ariadne.config import get_config
 from ariadne.graph.store import GraphStore
 from ariadne.graph.queries import GraphQueries
 from ariadne.parsers.registry import ParserRegistry
@@ -100,14 +99,42 @@ async def get_edges(session_id: str, type: str | None = None, limit: int = 100) 
 
 
 @router.get("/{session_id}/visualization")
-async def get_visualization_data(session_id: str) -> dict:
-    """Get graph data formatted for visualization (Cytoscape.js format)."""
+async def get_visualization_data(
+    session_id: str,
+    offset: int = 0,
+    limit: int = 500,
+    node_type: str | None = None,
+) -> dict:
+    """Get graph data formatted for visualization (Cytoscape.js format).
+
+    Args:
+        session_id: Session identifier
+        offset: Number of nodes to skip (default: 0)
+        limit: Maximum number of nodes to return (default: 500)
+        node_type: Filter by node type (optional)
+
+    Returns:
+        Cytoscape.js compatible elements with pagination metadata
+    """
     store = _graph_stores.get(session_id)
     if not store:
         raise HTTPException(status_code=404, detail="Graph not found")
 
-    nodes = []
+    # Collect all nodes with optional type filtering
+    all_nodes = []
     for node_id, data in store.graph.nodes(data=True):
+        if node_type and data.get("type") != node_type:
+            continue
+        all_nodes.append((node_id, data))
+
+    total_nodes = len(all_nodes)
+
+    # Apply pagination to nodes
+    paginated_nodes = all_nodes[offset : offset + limit]
+    paginated_node_ids = {n[0] for n in paginated_nodes}
+
+    nodes = []
+    for node_id, data in paginated_nodes:
         nodes.append({
             "data": {
                 "id": node_id,
@@ -116,21 +143,34 @@ async def get_visualization_data(session_id: str) -> dict:
             }
         })
 
+    # Only include edges where both endpoints are in the paginated nodes
     edges = []
+    total_edges = 0
     for source, target, data in store.graph.edges(data=True):
-        edges.append({
-            "data": {
-                "source": source,
-                "target": target,
-                "type": data.get("type", "related"),
-            }
-        })
+        total_edges += 1
+        if source in paginated_node_ids and target in paginated_node_ids:
+            edges.append({
+                "data": {
+                    "source": source,
+                    "target": target,
+                    "type": data.get("type", "related"),
+                }
+            })
 
     return {
         "elements": {
             "nodes": nodes,
             "edges": edges,
-        }
+        },
+        "pagination": {
+            "offset": offset,
+            "limit": limit,
+            "total_nodes": total_nodes,
+            "total_edges": total_edges,
+            "returned_nodes": len(nodes),
+            "returned_edges": len(edges),
+            "has_more": offset + limit < total_nodes,
+        },
     }
 
 

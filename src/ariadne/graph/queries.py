@@ -1,17 +1,41 @@
 """Graph query utilities for path finding and analysis."""
 
+import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from typing import Iterator
 
 import networkx as nx
 
-from ariadne.models.relationship import ATTACK_RELATIONSHIPS, RelationType
+from ariadne.models.relationship import ATTACK_RELATIONSHIPS
+
+logger = logging.getLogger(__name__)
+
+
+class PathFindingTimeout(Exception):
+    """Raised when path finding exceeds the configured timeout."""
+
+    pass
 
 
 class GraphQueries:
-    """Query utilities for the knowledge graph."""
+    """Query utilities for the knowledge graph.
+
+    Includes timeout protection and caching for scalable path finding.
+    """
 
     def __init__(self, graph: nx.DiGraph) -> None:
         self.graph = graph
+        self._attack_subgraph_cache: nx.DiGraph | None = None
+        self._cache_lock = threading.Lock()
+
+    def invalidate_cache(self) -> None:
+        """Invalidate the attack subgraph cache.
+
+        Call this when the graph is modified.
+        """
+        with self._cache_lock:
+            self._attack_subgraph_cache = None
 
     def find_entry_points(self) -> list[str]:
         """Find potential entry points (externally accessible services)."""
@@ -55,28 +79,131 @@ class GraphQueries:
             return None
 
     def all_paths(
-        self, source: str, target: str, max_length: int = 10
+        self,
+        source: str,
+        target: str,
+        max_length: int = 10,
+        max_paths: int | None = None,
     ) -> Iterator[list[str]]:
-        """Find all simple paths between two nodes."""
+        """Find all simple paths between two nodes.
+
+        Args:
+            source: Source node ID
+            target: Target node ID
+            max_length: Maximum path length (default: 10)
+            max_paths: Maximum number of paths to return (default: None for unlimited)
+
+        Yields:
+            Paths as lists of node IDs
+        """
         try:
-            yield from nx.all_simple_paths(
+            count = 0
+            for path in nx.all_simple_paths(
                 self.graph, source, target, cutoff=max_length
-            )
+            ):
+                yield path
+                count += 1
+                if max_paths is not None and count >= max_paths:
+                    return
         except nx.NetworkXNoPath:
             return
 
     def attack_paths(
-        self, source: str, target: str, max_length: int = 10
+        self,
+        source: str,
+        target: str,
+        max_length: int = 10,
+        max_paths: int | None = None,
+        timeout_seconds: float | None = None,
     ) -> Iterator[list[str]]:
-        """Find paths that only use attack-relevant edges."""
+        """Find paths that only use attack-relevant edges.
+
+        Args:
+            source: Source node ID
+            target: Target node ID
+            max_length: Maximum path length (default: 10)
+            max_paths: Maximum number of paths to return (default: None for unlimited)
+            timeout_seconds: Timeout in seconds (default: None for no timeout)
+
+        Yields:
+            Paths as lists of node IDs
+
+        Raises:
+            PathFindingTimeout: If timeout is exceeded
+        """
         attack_graph = self._get_attack_subgraph()
 
-        try:
-            yield from nx.all_simple_paths(
-                attack_graph, source, target, cutoff=max_length
+        if timeout_seconds is not None:
+            yield from self._attack_paths_with_timeout(
+                attack_graph, source, target, max_length, max_paths, timeout_seconds
             )
+        else:
+            yield from self._attack_paths_no_timeout(
+                attack_graph, source, target, max_length, max_paths
+            )
+
+    def _attack_paths_no_timeout(
+        self,
+        attack_graph: nx.DiGraph,
+        source: str,
+        target: str,
+        max_length: int,
+        max_paths: int | None,
+    ) -> Iterator[list[str]]:
+        """Find attack paths without timeout."""
+        try:
+            count = 0
+            for path in nx.all_simple_paths(
+                attack_graph, source, target, cutoff=max_length
+            ):
+                yield path
+                count += 1
+                if max_paths is not None and count >= max_paths:
+                    return
         except (nx.NetworkXNoPath, nx.NodeNotFound):
             return
+
+    def _attack_paths_with_timeout(
+        self,
+        attack_graph: nx.DiGraph,
+        source: str,
+        target: str,
+        max_length: int,
+        max_paths: int | None,
+        timeout_seconds: float,
+    ) -> Iterator[list[str]]:
+        """Find attack paths with timeout protection using threading."""
+        paths_found: list[list[str]] = []
+        stop_event = threading.Event()
+
+        def collect_paths() -> None:
+            try:
+                count = 0
+                for path in nx.all_simple_paths(
+                    attack_graph, source, target, cutoff=max_length
+                ):
+                    if stop_event.is_set():
+                        return
+                    paths_found.append(path)
+                    count += 1
+                    if max_paths is not None and count >= max_paths:
+                        return
+            except (nx.NetworkXNoPath, nx.NodeNotFound):
+                return
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(collect_paths)
+            try:
+                future.result(timeout=timeout_seconds)
+            except FuturesTimeoutError:
+                stop_event.set()
+                logger.warning(
+                    "Path finding timed out after %.1f seconds (found %d paths)",
+                    timeout_seconds,
+                    len(paths_found),
+                )
+
+        yield from paths_found
 
     def find_all_attack_paths(
         self,
@@ -84,8 +211,16 @@ class GraphQueries:
         targets: list[str] | None = None,
         max_length: int = 10,
         max_paths: int = 100,
+        timeout_seconds: float | None = 30.0,
     ) -> list[tuple[str, str, list[str]]]:
         """Find all attack paths between entry points and targets.
+
+        Args:
+            entry_points: Source nodes (default: auto-detect)
+            targets: Target nodes (default: auto-detect crown jewels)
+            max_length: Maximum path length (default: 10)
+            max_paths: Maximum total paths to return (default: 100)
+            timeout_seconds: Timeout in seconds (default: 30.0, None for no timeout)
 
         Returns:
             List of (source, target, path) tuples
@@ -96,34 +231,66 @@ class GraphQueries:
         if targets is None:
             targets = self.find_crown_jewels()
 
-        paths = []
+        paths: list[tuple[str, str, list[str]]] = []
+
+        # Calculate per-pair timeout to distribute time budget
+        num_pairs = len(entry_points) * len(targets)
+        pair_timeout = None
+        if timeout_seconds is not None and num_pairs > 0:
+            pair_timeout = max(1.0, timeout_seconds / num_pairs)
+
         for source in entry_points:
             for target in targets:
                 if source == target:
                     continue
 
-                for path in self.attack_paths(source, target, max_length):
-                    paths.append((source, target, path))
-                    if len(paths) >= max_paths:
-                        return paths
+                remaining_paths = max_paths - len(paths)
+                if remaining_paths <= 0:
+                    return paths
+
+                try:
+                    for path in self.attack_paths(
+                        source,
+                        target,
+                        max_length,
+                        max_paths=remaining_paths,
+                        timeout_seconds=pair_timeout,
+                    ):
+                        paths.append((source, target, path))
+                        if len(paths) >= max_paths:
+                            return paths
+                except PathFindingTimeout:
+                    logger.warning(
+                        "Timeout finding paths from %s to %s", source, target
+                    )
+                    continue
 
         return paths
 
     def _get_attack_subgraph(self) -> nx.DiGraph:
-        """Get subgraph containing only attack-relevant edges."""
-        attack_edge_types = {r.value for r in ATTACK_RELATIONSHIPS}
+        """Get subgraph containing only attack-relevant edges.
 
-        attack_edges = [
-            (u, v)
-            for u, v, data in self.graph.edges(data=True)
-            if data.get("is_attack_edge", False)
-            or data.get("type") in attack_edge_types
-        ]
+        Uses cached subgraph if available.
+        """
+        with self._cache_lock:
+            if self._attack_subgraph_cache is not None:
+                return self._attack_subgraph_cache
 
-        if not attack_edges:
-            return self.graph
+            attack_edge_types = {r.value for r in ATTACK_RELATIONSHIPS}
 
-        return self.graph.edge_subgraph(attack_edges).copy()
+            attack_edges = [
+                (u, v)
+                for u, v, data in self.graph.edges(data=True)
+                if data.get("is_attack_edge", False)
+                or data.get("type") in attack_edge_types
+            ]
+
+            if not attack_edges:
+                self._attack_subgraph_cache = self.graph
+            else:
+                self._attack_subgraph_cache = self.graph.edge_subgraph(attack_edges).copy()
+
+            return self._attack_subgraph_cache
 
     def get_neighbors(self, node: str, direction: str = "both") -> list[str]:
         """Get neighbors of a node.

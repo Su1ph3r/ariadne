@@ -6,7 +6,6 @@ from pydantic import BaseModel
 from ariadne.config import get_config
 from ariadne.engine.synthesizer import Synthesizer
 from ariadne.web.routes.ingest import get_session_path
-from ariadne.web.routes.graph import get_graph_store
 
 router = APIRouter()
 
