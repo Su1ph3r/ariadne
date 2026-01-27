@@ -18,6 +18,9 @@ class LLMConfig(BaseModel):
     base_url: Optional[str] = None
     temperature: float = 0.7
     max_tokens: int = 4096
+    timeout: int = 60  # Request timeout in seconds
+    max_retries: int = 3  # Maximum retry attempts
+    retry_delay: float = 1.0  # Base delay for exponential backoff
 
     def model_post_init(self, __context: object) -> None:
         if self.api_key and self.api_key.startswith("${") and self.api_key.endswith("}"):
@@ -41,6 +44,8 @@ class ScoringConfig(BaseModel):
     weights: ScoringWeights = Field(default_factory=ScoringWeights)
     min_path_score: float = 0.1
     max_path_length: int = 10
+    path_timeout_seconds: float = 30.0  # Timeout for path finding operations
+    max_paths_per_query: int = 100  # Maximum paths to return per query
 
 
 class ParsersConfig(BaseModel):
@@ -120,6 +125,7 @@ class AriadneConfig(BaseSettings):
     output: OutputConfig = Field(default_factory=OutputConfig)
     web: WebConfig = Field(default_factory=WebConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
+    mitre_techniques_path: Optional[str] = None  # Path to custom MITRE techniques YAML
 
     class Config:
         env_prefix = "ARIADNE_"

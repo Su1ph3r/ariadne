@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 
 from ariadne.config import AriadneConfig
-from ariadne.graph.builder import GraphBuilder
 from ariadne.graph.queries import GraphQueries
 from ariadne.graph.store import GraphStore
 from ariadne.llm.client import LLMClient

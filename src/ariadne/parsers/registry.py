@@ -1,11 +1,14 @@
 """Parser registry for discovering and managing parsers."""
 
+import logging
 from dataclasses import dataclass
 from importlib.metadata import entry_points
 from pathlib import Path
 from typing import Generator, Type
 
 from ariadne.parsers.base import BaseParser, Entity, ParserResult
+
+logger = logging.getLogger(__name__)
 
 
 _PARSER_REGISTRY: dict[str, Type[BaseParser]] = {}
@@ -63,10 +66,12 @@ class ParserRegistry:
                     parser_class = ep.load()
                     if issubclass(parser_class, BaseParser):
                         self._parsers[ep.name] = parser_class
-                except Exception:
-                    pass
-        except Exception:
-            pass
+                except Exception as e:
+                    logger.warning(
+                        "Failed to load parser entry point '%s': %s", ep.name, e
+                    )
+        except Exception as e:
+            logger.warning("Failed to discover parser entry points: %s", e)
 
     def _discover_builtin(self) -> None:
         """Import built-in parsers."""
@@ -117,6 +122,10 @@ class ParserRegistry:
             httpx,
             eyewitness,
         )
+        from ariadne.parsers.cloud import (
+            aws_scout,
+            azure_enum,
+        )
 
         for module in [
             nmap,
@@ -164,6 +173,8 @@ class ParserRegistry:
             subfinder,
             httpx,
             eyewitness,
+            aws_scout,
+            azure_enum,
         ]:
             for attr_name in dir(module):
                 attr = getattr(module, attr_name)
@@ -242,7 +253,13 @@ class ParserRegistry:
             if parser:
                 try:
                     yield from parser.parse(file_path)
-                except Exception:
+                except Exception as e:
+                    logger.warning(
+                        "Failed to parse file '%s' with parser '%s': %s",
+                        file_path,
+                        parser.name,
+                        e,
+                    )
                     continue
 
     def parse_all(self, path: Path) -> list[ParserResult]:

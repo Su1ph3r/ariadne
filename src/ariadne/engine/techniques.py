@@ -1,9 +1,18 @@
 """MITRE ATT&CK technique mapping."""
 
+import logging
+from pathlib import Path
+from typing import Any
+
+import yaml
+
 from ariadne.models.attack_path import AttackTechnique
 from ariadne.models.relationship import RelationType
 
+logger = logging.getLogger(__name__)
 
+
+# Default techniques database - used as fallback when no config file is found
 TECHNIQUE_DATABASE: dict[str, dict] = {
     "T1190": {
         "name": "Exploit Public-Facing Application",
@@ -98,6 +107,7 @@ TECHNIQUE_DATABASE: dict[str, dict] = {
 }
 
 
+# Default relationship to technique mapping
 RELATIONSHIP_TECHNIQUE_MAP: dict[RelationType, list[str]] = {
     RelationType.CAN_RDP: ["T1021.001"],
     RelationType.CAN_SSH: ["T1021.004"],
@@ -113,12 +123,134 @@ RELATIONSHIP_TECHNIQUE_MAP: dict[RelationType, list[str]] = {
 }
 
 
-class TechniqueMapper:
-    """Map attack steps to MITRE ATT&CK techniques."""
+def _load_techniques_from_file(config_path: Path) -> dict[str, Any] | None:
+    """Load techniques configuration from a YAML file.
 
-    def __init__(self) -> None:
-        self.techniques = TECHNIQUE_DATABASE
-        self.relationship_map = RELATIONSHIP_TECHNIQUE_MAP
+    Expected format:
+    ```yaml
+    version: "14.1"  # MITRE ATT&CK version (optional)
+    techniques:
+      T1190:
+        name: "Exploit Public-Facing Application"
+        tactic: "initial-access"
+        description: "..."
+    relationship_mappings:
+      CAN_RDP:
+        - T1021.001
+    ```
+
+    Args:
+        config_path: Path to the YAML configuration file
+
+    Returns:
+        Parsed configuration dictionary, or None if loading failed
+    """
+    try:
+        with open(config_path) as f:
+            data = yaml.safe_load(f)
+            if not isinstance(data, dict):
+                logger.warning("Invalid techniques config format: expected dict")
+                return None
+            return data
+    except FileNotFoundError:
+        logger.debug("Techniques config file not found: %s", config_path)
+        return None
+    except yaml.YAMLError as e:
+        logger.warning("Failed to parse techniques config: %s", e)
+        return None
+    except Exception as e:
+        logger.warning("Error loading techniques config: %s", e)
+        return None
+
+
+def _parse_relationship_mappings(
+    mappings: dict[str, list[str]]
+) -> dict[RelationType, list[str]]:
+    """Parse relationship mappings from config to RelationType enum keys.
+
+    Args:
+        mappings: Dictionary with string keys (relationship names)
+
+    Returns:
+        Dictionary with RelationType enum keys
+    """
+    result: dict[RelationType, list[str]] = {}
+    for rel_name, technique_ids in mappings.items():
+        try:
+            rel_type = RelationType(rel_name.lower())
+            result[rel_type] = technique_ids
+        except ValueError:
+            # Try uppercase version
+            try:
+                rel_type = RelationType[rel_name.upper()]
+                result[rel_type] = technique_ids
+            except KeyError:
+                logger.warning("Unknown relationship type in config: %s", rel_name)
+                continue
+    return result
+
+
+class TechniqueMapper:
+    """Map attack steps to MITRE ATT&CK techniques.
+
+    Supports loading technique definitions from an external YAML file
+    for easier updates without code changes. Falls back to built-in
+    defaults if no config file is provided or found.
+    """
+
+    def __init__(self, config_path: Path | None = None) -> None:
+        """Initialize the technique mapper.
+
+        Args:
+            config_path: Optional path to a YAML configuration file.
+                        If None, uses built-in defaults.
+        """
+        self.techniques = TECHNIQUE_DATABASE.copy()
+        self.relationship_map = RELATIONSHIP_TECHNIQUE_MAP.copy()
+        self.version: str | None = None
+
+        if config_path:
+            self._load_from_file(config_path)
+
+    def _load_from_file(self, config_path: Path) -> None:
+        """Load techniques from a configuration file.
+
+        Args:
+            config_path: Path to the YAML configuration file
+        """
+        data = _load_techniques_from_file(config_path)
+        if not data:
+            return
+
+        self.version = data.get("version")
+
+        # Load techniques
+        if "techniques" in data and isinstance(data["techniques"], dict):
+            loaded_count = 0
+            for tid, tdata in data["techniques"].items():
+                if isinstance(tdata, dict) and "name" in tdata and "tactic" in tdata:
+                    self.techniques[tid] = tdata
+                    loaded_count += 1
+                else:
+                    logger.warning(
+                        "Invalid technique entry '%s': missing name or tactic", tid
+                    )
+            logger.info(
+                "Loaded %d techniques from %s (version: %s)",
+                loaded_count,
+                config_path,
+                self.version or "unknown",
+            )
+
+        # Load relationship mappings
+        if "relationship_mappings" in data and isinstance(
+            data["relationship_mappings"], dict
+        ):
+            parsed = _parse_relationship_mappings(data["relationship_mappings"])
+            self.relationship_map.update(parsed)
+            logger.debug(
+                "Loaded %d relationship mappings from config", len(parsed)
+            )
 
     def get_technique(self, technique_id: str) -> AttackTechnique | None:
         """Get technique details by ID."""
