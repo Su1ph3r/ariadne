@@ -6,6 +6,9 @@ from pathlib import Path
 from typing import Any
 
 from ariadne.config import AriadneConfig
+from ariadne.engine.privesc import PrivescReport
+from ariadne.engine.scoring import PathScorer
+from ariadne.engine.sprawl import SprawlReport
 from ariadne.graph.queries import GraphQueries
 from ariadne.graph.store import GraphStore
 from ariadne.llm.client import LLMClient
@@ -13,7 +16,6 @@ from ariadne.llm.prompts import PromptTemplates
 from ariadne.models.attack_path import AttackPath, AttackStep, AttackTechnique
 from ariadne.models.playbook import Playbook
 from ariadne.parsers.registry import ParserRegistry
-from ariadne.engine.scoring import PathScorer
 
 
 @dataclass
@@ -46,6 +48,8 @@ class Synthesizer:
         self.llm = LLMClient(config)
         self.scorer = PathScorer(config)
         self._queries: GraphQueries | None = None
+        self._sprawl_report: SprawlReport | None = None
+        self._privesc_report: PrivescReport | None = None
 
     @property
     def queries(self) -> GraphQueries:
@@ -106,6 +110,24 @@ class Synthesizer:
             List of synthesized attack paths, ranked by score
         """
         self._parse_input(input_path)
+
+        # Credential sprawl analysis
+        if self.config.sprawl.enabled:
+            from ariadne.engine.sprawl import SprawlAnalyzer
+
+            analyzer = SprawlAnalyzer(
+                self.store, min_reuse_count=self.config.sprawl.min_reuse_count
+            )
+            self._sprawl_report = analyzer.analyze()
+            self._queries = None
+
+        # Privilege escalation chaining
+        if self.config.privesc.enabled:
+            from ariadne.engine.privesc import PrivescChainer
+
+            chainer = PrivescChainer(self.store, min_confidence=self.config.privesc.min_confidence)
+            self._privesc_report = chainer.analyze()
+            self._queries = None
 
         graph_entry_points = self._resolve_entry_points(entry_points)
         graph_targets = self._resolve_targets(targets)
@@ -206,7 +228,9 @@ class Synthesizer:
             tgt_data = self.store.graph.nodes.get(tgt, {})
 
             action = edge_data.get("type", "access").replace("_", " ").title()
-            description = f"{action} from {src_data.get('label', src)} to {tgt_data.get('label', tgt)}"
+            src_label = src_data.get("label", src)
+            tgt_label = tgt_data.get("label", tgt)
+            description = f"{action} from {src_label} to {tgt_label}"
 
             vulns = self.queries.get_vulnerabilities_on_path([src, tgt])
 
@@ -309,6 +333,8 @@ class Synthesizer:
         output_path: Path,
         format: str = "html",
         playbooks: list[Playbook] | None = None,
+        sprawl_report: SprawlReport | None = None,
+        privesc_report: PrivescReport | None = None,
     ) -> None:
         """Export attack paths to a report file."""
         if format == "json":
@@ -320,4 +346,11 @@ class Synthesizer:
         else:
             raise ValueError(f"Unknown format: {format}")
 
-        reporter.generate(paths, output_path, self.store.stats(), playbooks=playbooks)
+        reporter.generate(
+            paths,
+            output_path,
+            self.store.stats(),
+            playbooks=playbooks,
+            sprawl_report=sprawl_report,
+            privesc_report=privesc_report,
+        )

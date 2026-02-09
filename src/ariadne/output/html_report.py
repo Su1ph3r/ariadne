@@ -8,6 +8,8 @@ from pathlib import Path
 
 from jinja2 import Environment, PackageLoader, select_autoescape
 
+from ariadne.engine.privesc import PrivescReport
+from ariadne.engine.sprawl import SprawlReport
 from ariadne.models.attack_path import AttackPath
 from ariadne.models.playbook import Playbook
 
@@ -30,6 +32,8 @@ class HtmlReporter:
         output_path: Path,
         stats: dict | None = None,
         playbooks: list[Playbook] | None = None,
+        sprawl_report: SprawlReport | None = None,
+        privesc_report: PrivescReport | None = None,
     ) -> Path:
         """Generate an HTML report.
 
@@ -58,11 +62,17 @@ class HtmlReporter:
                     generated_at=datetime.utcnow().isoformat(),
                     summary=self._generate_summary(paths),
                     playbook_map=playbook_map,
+                    sprawl_report=sprawl_report,
+                    privesc_report=privesc_report,
                 )
             except Exception:
-                html = self._generate_fallback_html(paths, stats, playbook_map)
+                html = self._generate_fallback_html(
+                    paths, stats, playbook_map, sprawl_report, privesc_report
+                )
         else:
-            html = self._generate_fallback_html(paths, stats, playbook_map)
+            html = self._generate_fallback_html(
+                paths, stats, playbook_map, sprawl_report, privesc_report
+            )
 
         with open(output_file, "w") as f:
             f.write(html)
@@ -148,11 +158,113 @@ class HtmlReporter:
                 </details>
             </div>"""
 
+    def _render_sprawl_html(self, sprawl_report: SprawlReport) -> str:
+        """Render credential sprawl section as HTML."""
+        rows = ""
+        for cluster in sprawl_report.clusters:
+            host_count = len(set(cluster.affected_asset_ids))
+            assets = ", ".join(escape(a) for a in cluster.affected_asset_ids)
+            score_class = "critical" if cluster.sprawl_score >= 0.8 else "high" if cluster.sprawl_score >= 0.5 else "medium"
+            rows += f"""
+                <tr>
+                    <td>{escape(cluster.display_name)}</td>
+                    <td><span class="probability" style="font-size: 0.9rem;">{cluster.sprawl_score:.0%}</span></td>
+                    <td>{host_count}</td>
+                    <td><small>{assets}</small></td>
+                </tr>"""
+
+        return f"""
+        <div class="analysis-section">
+            <h2>Credential Sprawl Analysis</h2>
+            <div class="summary" style="margin-bottom: 1rem;">
+                <div class="stat-card">
+                    <div class="value">{sprawl_report.total_credentials}</div>
+                    <div class="label">Total Credentials</div>
+                </div>
+                <div class="stat-card critical">
+                    <div class="value">{sprawl_report.total_reused}</div>
+                    <div class="label">Reused Credentials</div>
+                </div>
+                <div class="stat-card">
+                    <div class="value">{len(sprawl_report.clusters)}</div>
+                    <div class="label">Reuse Clusters</div>
+                </div>
+                <div class="stat-card">
+                    <div class="value">{sprawl_report.relationships_created}</div>
+                    <div class="label">Edges Created</div>
+                </div>
+            </div>
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 2px solid var(--border-color);">
+                        <th style="text-align: left; padding: 0.5rem;">Credential</th>
+                        <th style="text-align: left; padding: 0.5rem;">Sprawl Score</th>
+                        <th style="text-align: left; padding: 0.5rem;">Hosts</th>
+                        <th style="text-align: left; padding: 0.5rem;">Affected Assets</th>
+                    </tr>
+                </thead>
+                <tbody>{rows}</tbody>
+            </table>
+        </div>"""
+
+    def _render_privesc_html(self, privesc_report: PrivescReport) -> str:
+        """Render privilege escalation chains section as HTML."""
+        chains_html = ""
+        for chain in privesc_report.chains:
+            vectors_html = ""
+            for v in chain.vectors:
+                vectors_html += f"""
+                    <div class="step" style="padding: 0.5rem 0;">
+                        <div class="step-content">
+                            <strong>{escape(v.source_level.name)} &rarr; {escape(v.target_level.name)}</strong>
+                            <span class="technique">[{escape(v.technique_id)}]</span>
+                            <p>{escape(v.finding_title)}</p>
+                            <small>Confidence: {v.confidence:.0%}</small>
+                        </div>
+                    </div>"""
+
+            chains_html += f"""
+            <div class="attack-path" style="margin-bottom: 1rem;">
+                <div class="path-header">
+                    <h3>{escape(chain.host_id)}</h3>
+                    <span class="probability">{escape(chain.source_level.name)} &rarr; {escape(chain.target_level.name)}</span>
+                </div>
+                <div class="steps" style="padding: 1rem 1.5rem;">
+                    {vectors_html}
+                </div>
+            </div>"""
+
+        return f"""
+        <div class="analysis-section">
+            <h2>Privilege Escalation Chains</h2>
+            <div class="summary" style="margin-bottom: 1rem;">
+                <div class="stat-card">
+                    <div class="value">{privesc_report.hosts_with_privesc}</div>
+                    <div class="label">Hosts with Privesc</div>
+                </div>
+                <div class="stat-card critical">
+                    <div class="value">{privesc_report.total_vectors}</div>
+                    <div class="label">Total Vectors</div>
+                </div>
+                <div class="stat-card">
+                    <div class="value">{privesc_report.context_nodes_created}</div>
+                    <div class="label">Context Nodes</div>
+                </div>
+                <div class="stat-card">
+                    <div class="value">{privesc_report.edges_created}</div>
+                    <div class="label">Edges Created</div>
+                </div>
+            </div>
+            {chains_html}
+        </div>"""
+
     def _generate_fallback_html(
         self,
         paths: list[AttackPath],
         stats: dict | None,
         playbook_map: dict[str, Playbook] | None = None,
+        sprawl_report: SprawlReport | None = None,
+        privesc_report: PrivescReport | None = None,
     ) -> str:
         """Generate HTML without Jinja2 templates."""
         summary = self._generate_summary(paths)
@@ -601,6 +713,8 @@ class HtmlReporter:
 
         <main>
             {paths_html if paths_html else '<p style="text-align: center; color: var(--text-secondary);">No attack paths found.</p>'}
+            {self._render_sprawl_html(sprawl_report) if sprawl_report and sprawl_report.clusters else ''}
+            {self._render_privesc_html(privesc_report) if privesc_report and privesc_report.chains else ''}
         </main>
 
         <footer>

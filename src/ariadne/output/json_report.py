@@ -6,6 +6,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+from ariadne.engine.privesc import PrivescReport
+from ariadne.engine.sprawl import SprawlReport
 from ariadne.models.attack_path import AttackPath
 from ariadne.models.playbook import Playbook
 
@@ -19,6 +21,8 @@ class JsonReporter:
         output_path: Path,
         stats: dict | None = None,
         playbooks: list[Playbook] | None = None,
+        sprawl_report: SprawlReport | None = None,
+        privesc_report: PrivescReport | None = None,
     ) -> Path:
         """Generate a JSON report.
 
@@ -53,6 +57,52 @@ class JsonReporter:
 
         if stats:
             report["environment"] = stats
+
+        if sprawl_report and sprawl_report.clusters:
+            report["credential_sprawl"] = {
+                "total_credentials": sprawl_report.total_credentials,
+                "total_reused": sprawl_report.total_reused,
+                "relationships_created": sprawl_report.relationships_created,
+                "clusters": [
+                    {
+                        "display_name": c.display_name,
+                        "canonical_id": c.canonical_id,
+                        "sprawl_score": c.sprawl_score,
+                        "host_count": len(set(c.affected_asset_ids)),
+                        "affected_assets": c.affected_asset_ids,
+                        "credential_ids": c.credential_ids,
+                    }
+                    for c in sprawl_report.clusters
+                ],
+            }
+
+        if privesc_report and privesc_report.chains:
+            report["privesc_chains"] = {
+                "hosts_with_privesc": privesc_report.hosts_with_privesc,
+                "total_vectors": privesc_report.total_vectors,
+                "context_nodes_created": privesc_report.context_nodes_created,
+                "edges_created": privesc_report.edges_created,
+                "chains": [
+                    {
+                        "host_id": chain.host_id,
+                        "source_level": chain.source_level.name,
+                        "target_level": chain.target_level.name,
+                        "max_confidence": chain.max_confidence,
+                        "vectors": [
+                            {
+                                "finding_id": v.finding_id,
+                                "finding_title": v.finding_title,
+                                "source_level": v.source_level.name,
+                                "target_level": v.target_level.name,
+                                "technique_id": v.technique_id,
+                                "confidence": v.confidence,
+                            }
+                            for v in chain.vectors
+                        ],
+                    }
+                    for chain in privesc_report.chains
+                ],
+            }
 
         with open(output_file, "w") as f:
             json.dump(report, f, indent=2, default=str)

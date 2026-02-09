@@ -104,6 +104,61 @@ TECHNIQUE_DATABASE: dict[str, dict] = {
         "tactic": "lateral-movement",
         "description": "Adversaries may use stolen NTLM hashes to authenticate.",
     },
+    "T1134": {
+        "name": "Access Token Manipulation",
+        "tactic": "privilege-escalation",
+        "description": "Adversaries may modify access tokens to operate under a different security context.",
+    },
+    "T1134.001": {
+        "name": "Token Impersonation/Theft",
+        "tactic": "privilege-escalation",
+        "description": "Adversaries may duplicate then impersonate another user's existing token.",
+    },
+    "T1574": {
+        "name": "Hijack Execution Flow",
+        "tactic": "privilege-escalation",
+        "description": "Adversaries may hijack the way an OS runs programs to execute their own code.",
+    },
+    "T1574.007": {
+        "name": "Path Interception by PATH Environment Variable",
+        "tactic": "privilege-escalation",
+        "description": "Adversaries may place a program in an earlier entry in the PATH to hijack execution.",
+    },
+    "T1574.009": {
+        "name": "Path Interception by Unquoted Path",
+        "tactic": "privilege-escalation",
+        "description": "Adversaries may take advantage of unquoted paths to place an executable.",
+    },
+    "T1574.010": {
+        "name": "Services File Permissions Weakness",
+        "tactic": "privilege-escalation",
+        "description": "Adversaries may replace service binaries with malicious ones to escalate privileges.",
+    },
+    "T1053.005": {
+        "name": "Scheduled Task",
+        "tactic": "privilege-escalation",
+        "description": "Adversaries may abuse scheduled tasks to execute malicious code at elevated privileges.",
+    },
+    "T1548.002": {
+        "name": "Bypass User Account Control",
+        "tactic": "privilege-escalation",
+        "description": "Adversaries may bypass UAC to elevate privileges on a system.",
+    },
+    "T1552.001": {
+        "name": "Credentials In Files",
+        "tactic": "credential-access",
+        "description": "Adversaries may search local file systems for files containing credentials.",
+    },
+    "T1003.002": {
+        "name": "Security Account Manager",
+        "tactic": "credential-access",
+        "description": "Adversaries may attempt to extract credential material from the SAM database.",
+    },
+    "T1222": {
+        "name": "File and Directory Permissions Modification",
+        "tactic": "defense-evasion",
+        "description": "Adversaries may modify file or directory permissions to evade access control.",
+    },
 }
 
 
@@ -120,6 +175,9 @@ RELATIONSHIP_TECHNIQUE_MAP: dict[RelationType, list[str]] = {
     RelationType.CAN_FORCE_CHANGE_PASSWORD: ["T1098"],
     RelationType.CAN_READ_LAPS: ["T1003"],
     RelationType.CAN_READ_GMSA: ["T1003"],
+    RelationType.CREDENTIAL_REUSE: ["T1078", "T1550.002"],
+    RelationType.CAN_AUTH_AS: ["T1078"],
+    RelationType.CAN_PRIVESC: ["T1068", "T1134", "T1548"],
 }
 
 

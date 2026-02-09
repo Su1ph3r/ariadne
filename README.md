@@ -15,6 +15,8 @@ Named after the mythological princess who provided Theseus with the thread to na
 - **Attack Path Synthesis**: AI-powered identification of viable attack paths through the environment
 - **MITRE ATT&CK Mapping**: Automatic technique mapping for each attack step
 - **Risk Scoring**: Probability-based scoring considering CVSS, exploit availability, network position, and detection likelihood
+- **Credential Sprawl Analysis**: Detect credential reuse across hosts and map the blast radius of compromised secrets
+- **Privilege Escalation Chaining**: Model local privilege escalation as intra-host attack paths with automatic technique mapping
 - **Operator Playbooks**: Generate executable playbooks with tool commands, OPSEC notes, fallback techniques, and detection signatures for each attack path
 - **Multiple Export Formats**: HTML reports, JSON, GraphML, and Neo4j Cypher statements
 - **Web Dashboard**: Interactive UI for uploading data and visualizing results
@@ -81,6 +83,15 @@ ariadne analyze ./scan_data/ --output results --format json
 
 # Generate operator playbooks alongside attack paths
 ariadne analyze ./scan_data/ --output report --format html --playbook
+
+# Enable credential sprawl analysis
+ariadne analyze ./scan_data/ --output report --format html --sprawl
+
+# Enable privilege escalation chaining
+ariadne analyze ./scan_data/ --output report --format html --privesc
+
+# Full analysis with all features
+ariadne analyze ./scan_data/ --output report --format html --playbook --sprawl --privesc
 ```
 
 ### Web Interface
@@ -218,6 +229,15 @@ output:
   default_format: html
   max_paths: 20
 
+sprawl:
+  enabled: false
+  min_reuse_count: 2
+  sprawl_score_weight: 0.15
+
+privesc:
+  enabled: false
+  min_confidence: 0.5
+
 web:
   host: 127.0.0.1
   port: 8443
@@ -278,6 +298,8 @@ Playbooks cover attack techniques across all domains:
 | **Network** | SSH, RDP, WinRM/PSRemote, SMB lateral movement (PsExec, WmiExec), vulnerability exploitation |
 | **Cloud** | AWS STS AssumeRole, Azure role escalation, IAM permission abuse |
 | **Sessions** | Pass-the-Hash, credential reuse |
+| **Credential Sprawl** | Credential reuse lateral movement, Pass-the-Hash with reused credentials |
+| **Privilege Escalation** | SeImpersonate (GodPotato/PrintSpoofer), modifiable service binary, unquoted service path, AlwaysInstallElevated |
 
 ### Two-Tier Generation
 
@@ -302,10 +324,98 @@ Playbook commands use placeholders like `{target_ip}`, `{domain}`, `{username}`,
 
 ---
 
+## Credential Sprawl Analysis
+
+Ariadne can detect credential reuse across hosts and map the blast radius of compromised secrets. When enabled, the sprawl analyzer correlates credentials found by different tools (Mimikatz, secretsdump, CrackMapExec, etc.) and creates `CREDENTIAL_REUSE` edges in the knowledge graph.
+
+### How It Works
+
+1. **Credential Collection**: Gathers all credential findings from parsed tool output
+2. **Clustering**: Groups credentials by username/domain, then sub-clusters by matching password values or NTLM hashes (using union-find for efficiency)
+3. **Sprawl Scoring**: Assigns a sprawl score based on the number of distinct hosts sharing the credential (2 hosts = 0.3, 3-4 = 0.5, 5-9 = 0.8, 10+ = 1.0)
+4. **Graph Enrichment**: Creates bidirectional `CREDENTIAL_REUSE` edges between affected hosts and `CAN_AUTH_AS` edges linking hosts to matching user accounts
+5. **Path Integration**: The path finder automatically traverses sprawl edges, discovering credential-reuse-based lateral movement paths
+
+### Usage
+
+```bash
+# Enable with --sprawl flag
+ariadne analyze ./scan_data/ --output report --format html --sprawl
+```
+
+### Configuration
+
+```yaml
+sprawl:
+  enabled: false          # Enable credential sprawl analysis
+  min_reuse_count: 2      # Minimum hosts sharing a credential to flag as reuse
+  sprawl_score_weight: 0.15  # Weight in overall path scoring
+```
+
+---
+
+## Privilege Escalation Chaining
+
+Ariadne models local privilege escalation as intra-host attack paths. When enabled, the privesc chainer analyzes findings on each host and creates escalation chains that the path finder can traverse.
+
+### How It Works
+
+1. **Finding Classification**: Matches host findings against a built-in vector map covering common Windows privesc vectors (SeImpersonatePrivilege, modifiable services, AlwaysInstallElevated, unquoted paths, missing patches, etc.)
+2. **Privilege Context Nodes**: Creates virtual nodes representing privilege levels on each host (e.g., `UNPRIVILEGED`, `SYSTEM`, `LOCAL_ADMIN`)
+3. **Escalation Edges**: Creates `CAN_PRIVESC` edges between privilege levels with MITRE ATT&CK technique mappings
+4. **Lateral Integration**: Connects incoming lateral movement edges to `UNPRIVILEGED` context and outgoing edges from the highest achieved privilege level
+
+This enables the path finder to discover paths like:
+```
+Host A → [CAN_RDP] → priv:UNPRIVILEGED@Host B → [CAN_PRIVESC/T1134.001] → priv:SYSTEM@Host B → [ADMIN_TO] → Host C
+```
+
+### Supported Privesc Vectors
+
+| Vector | Escalation | MITRE Technique | Confidence |
+|--------|-----------|-----------------|------------|
+| SeImpersonatePrivilege | Unprivileged → SYSTEM | T1134.001 | 0.9 |
+| SeDebugPrivilege | Unprivileged → SYSTEM | T1134 | 0.9 |
+| Modifiable Service | Unprivileged → SYSTEM | T1574.010 | 0.85 |
+| AlwaysInstallElevated | Unprivileged → SYSTEM | T1548.002 | 0.9 |
+| Unquoted Service Path | Unprivileged → SYSTEM | T1574.009 | 0.6 |
+| AutoLogon Credentials | Unprivileged → Local Admin | T1552.001 | 0.95 |
+| SeBackupPrivilege | Unprivileged → Local Admin | T1003.002 | 0.8 |
+| SeLoadDriverPrivilege | Unprivileged → SYSTEM | T1068 | 0.8 |
+| Missing Patch (privesc-tagged) | Unprivileged → SYSTEM | T1068 | 0.7 |
+
+### Usage
+
+```bash
+# Enable with --privesc flag
+ariadne analyze ./scan_data/ --output report --format html --privesc
+```
+
+### Configuration
+
+```yaml
+privesc:
+  enabled: false          # Enable privilege escalation chaining
+  min_confidence: 0.5     # Minimum confidence threshold for vectors
+```
+
+---
+
 ## Architecture
 
 ```
 Input Files --> Parsers --> Entities --> Graph Builder --> NetworkX Graph
+                                                              |
+                                                    +---------+---------+
+                                                    |                   |
+                                                    v                   v
+                                            Sprawl Analyzer    Privesc Chainer
+                                            (credential reuse) (local escalation)
+                                                    |                   |
+                                                    +---------+---------+
+                                                              |
+                                                              v
+                                                    Enriched Knowledge Graph
                                                               |
                                                               v
                                                          Path Finding
@@ -328,7 +438,7 @@ Input Files --> Parsers --> Entities --> Graph Builder --> NetworkX Graph
 - **Parsers** (`ariadne.parsers`): Plugin-based system that normalizes tool output into unified entity models
 - **Models** (`ariadne.models`): Pydantic models for assets (Host, Service, User), findings (Vulnerability, Credential), relationships, and playbooks
 - **Graph** (`ariadne.graph`): NetworkX-based knowledge graph with attack-relevant edge types
-- **Engine** (`ariadne.engine`): Orchestrates parsing, graph building, path finding, scoring, and playbook generation
+- **Engine** (`ariadne.engine`): Orchestrates parsing, graph building, credential sprawl analysis, privilege escalation chaining, path finding, scoring, and playbook generation
 - **LLM** (`ariadne.llm`): LiteLLM wrapper supporting multiple providers for AI-powered analysis and playbook enhancement
 - **Output** (`ariadne.output`): Report generators for HTML, JSON, and graph formats with integrated playbook sections
 

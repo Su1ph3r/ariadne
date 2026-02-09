@@ -4,6 +4,7 @@ import networkx as nx
 
 from ariadne.config import AriadneConfig
 from ariadne.models.attack_path import AttackPath
+from ariadne.models.relationship import RelationType
 
 
 class PathScorer:
@@ -33,12 +34,15 @@ class PathScorer:
         privilege_score = self._score_privilege_requirements(path, graph)
         detection_score = self._score_detection_likelihood(path)
 
+        sprawl_score = self._score_credential_sprawl(path, graph)
+
         base_score = (
             cvss_score * self.weights.cvss
             + exploit_score * self.weights.exploit_available
             + position_score * self.weights.network_position
             + privilege_score * self.weights.privilege_required
             + (1 - detection_score) * self.weights.detection_likelihood
+            + sprawl_score * self.weights.credential_sprawl
         )
 
         length_penalty = max(0.5, 1.0 - (len(path.steps) - 1) * 0.05)
@@ -140,6 +144,22 @@ class PathScorer:
         avg_detection = total_detection / len(path.steps)
 
         return avg_detection
+
+    def _score_credential_sprawl(self, path: AttackPath, graph: nx.DiGraph) -> float:
+        """Score based on credential reuse in the path.
+
+        Returns the max sprawl_score from any credential_reuse edge in the path.
+        """
+        max_sprawl = 0.0
+        for step in path.steps:
+            src = step.source_asset_id
+            tgt = step.target_asset_id
+            edge_data = graph.edges.get((src, tgt), {})
+            if edge_data.get("type") == RelationType.CREDENTIAL_REUSE.value:
+                props = edge_data.get("properties", {})
+                score = props.get("sprawl_score", 0.0)
+                max_sprawl = max(max_sprawl, score)
+        return max_sprawl
 
     def score_step(self, step: dict, graph: nx.DiGraph) -> float:
         """Score an individual attack step."""

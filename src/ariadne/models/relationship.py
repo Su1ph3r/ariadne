@@ -44,6 +44,12 @@ class RelationType(str, Enum):
     HAS_PERMISSION = "has_permission"
     CONTAINS = "contains"
 
+    CREDENTIAL_REUSE = "credential_reuse"
+    CAN_AUTH_AS = "can_auth_as"
+    CAN_PRIVESC = "can_privesc"
+    HAS_PRIV_CONTEXT = "has_priv_context"
+    HAS_DANGEROUS_PRIVILEGE = "has_dangerous_privilege"
+
     RESOLVES_TO = "resolves_to"
     RELATED_TO = "related_to"
 
@@ -67,6 +73,9 @@ ATTACK_RELATIONSHIPS = {
     RelationType.CAN_READ_GMSA,
     RelationType.OWNS,
     RelationType.CAN_ASSUME,
+    RelationType.CREDENTIAL_REUSE,
+    RelationType.CAN_AUTH_AS,
+    RelationType.CAN_PRIVESC,
 }
 
 

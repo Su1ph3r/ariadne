@@ -36,6 +36,7 @@ class ScoringWeights(BaseModel):
     network_position: float = 0.2
     privilege_required: float = 0.15
     detection_likelihood: float = 0.1
+    credential_sprawl: float = 0.0
 
 
 class ScoringConfig(BaseModel):
@@ -83,6 +84,21 @@ class PlaybookConfig(BaseModel):
     llm_enhance: bool = True
     include_detection_sigs: bool = True
     max_fallbacks: int = 2
+
+
+class SprawlConfig(BaseModel):
+    """Credential sprawl analysis configuration."""
+
+    enabled: bool = False
+    min_reuse_count: int = 2
+    sprawl_score_weight: float = 0.15
+
+
+class PrivescConfig(BaseModel):
+    """Privilege escalation chaining configuration."""
+
+    enabled: bool = False
+    min_confidence: float = 0.5
 
 
 class StorageConfig(BaseModel):
@@ -135,6 +151,8 @@ class AriadneConfig(BaseSettings):
     web: WebConfig = Field(default_factory=WebConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     playbook: PlaybookConfig = Field(default_factory=PlaybookConfig)
+    sprawl: SprawlConfig = Field(default_factory=SprawlConfig)
+    privesc: PrivescConfig = Field(default_factory=PrivescConfig)
     mitre_techniques_path: Optional[str] = None  # Path to custom MITRE techniques YAML
 
     class Config:
