@@ -557,6 +557,11 @@ This tool is intended for authorized security testing only. Always obtain proper
 
 ---
 
+## Roadmap
+
+- **Vinculum Integration**: Accept deduplicated, EPSS-enriched findings from [Vinculum](https://github.com/su1ph3r/vinculum) as an input source — Vinculum deduplicates and normalises multi-scanner output, Ariadne synthesises attack paths from the clean dataset
+- **Reticustos Pipeline**: Support end-to-end flow from Reticustos (scan orchestration) through Vinculum (correlation) into Ariadne (attack path synthesis) for a unified security analysis pipeline
+
 ## Contributing
 
 Contributions are welcome. Please ensure:
