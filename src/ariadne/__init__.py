@@ -6,7 +6,7 @@ to navigate the Minotaur's labyrinth. This tool traces threads through
 the labyrinth of your attack surface.
 """
 
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 __author__ = "Security Research"
 
 from ariadne.models.asset import Host, Service, User, CloudResource

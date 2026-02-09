@@ -4,6 +4,16 @@ All notable changes to Ariadne will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-02-09
+
+### Added
+
+#### Cross-Tool Integration
+- `export-endpoints` CLI command exporting knowledge graph endpoints in Indago-compatible format
+- Vinculum parser v1.1 support with Container, MobileApp, and ApiEndpoint entity types
+- 4 new RelationType entries: `has_cloud_vulnerability`, `has_container_escape`, `has_mobile_vulnerability`, `has_api_vulnerability`
+- Endpoint exporter module in `src/ariadne/exporters/`
+
 ## [0.1.1] - 2025-02-09
 
 ### Added
@@ -177,3 +187,5 @@ graph.loadData(sessionId, {
 ### New Methods
 - `loadMore(sessionId, options)` - Load additional nodes incrementally
 - `getPagination()` - Get current pagination state
+
+[0.2.0]: https://github.com/Su1ph3r/ariadne/compare/v0.1.1...v0.2.0

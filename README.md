@@ -563,41 +563,37 @@ This tool is intended for authorized security testing only. Always obtain proper
 
 ---
 
-## Pipeline Integration
+## Cross-Tool Integration
 
-Ariadne is the downstream consumer in the Reticustos → Vinculum → Ariadne security pipeline:
+Ariadne participates in a cross-tool security pipeline:
 
 ```
-Reticustos (scan orchestration)
-  │  Nmap, Nuclei, testssl, Nikto, Masscan, Shodan
-  │
-  ▼  JSON export
-Vinculum (correlation engine)
-  │  Deduplicate, fingerprint, EPSS enrich, correlate
-  │
-  ▼  vinculum-ariadne-export format
-Ariadne (attack path synthesis)
-     Build knowledge graph, synthesize attack paths, generate playbooks
+Nubicustos (cloud) ──containers──> Cepheus (container escape)
+Reticustos (network) ──endpoints──> Indago (API fuzzing)
+Indago (API fuzzing) ──WAF-blocked──> BypassBurrito (WAF bypass)
+Ariadne (attack paths) ──endpoints──> Indago (API fuzzing)
+All tools ──findings──> Vinculum (correlation) ──export──> Ariadne (attack paths)
 ```
 
-### Vinculum → Ariadne
+### Importing from Vinculum
+
+Ingest correlated findings with extended entity types (v1.1):
 
 ```bash
-# Vinculum exports correlated findings
 vinculum ingest scan_results/* --format ariadne --output correlated.json
-
-# Ariadne ingests and builds attack paths
-ariadne analyze correlated.json --output report --format html --playbook --sprawl --privesc
+ariadne analyze correlated.json --output report --format html --playbook
 ```
 
-The Vinculum parser ingests the `vinculum-ariadne-export` format containing:
-- **Hosts and services** with OS and version data
-- **Vulnerabilities** with CVE/CVSS, classified from correlated scanner findings
-- **Misconfigurations** with remediation guidance
-- **Relationships** (service→host, finding→asset) pre-built for graph construction
-- **Vinculum metadata** preserved in `raw_data`: correlation IDs, fingerprints, source tools (e.g., `reticustos:nuclei`), finding counts, and EPSS scores
+The Vinculum parser (v1.1) ingests cloud resources, containers, mobile apps, API endpoints, and correlation metadata for enriched knowledge graphs.
 
-This enables Ariadne to build richer knowledge graphs with multi-scanner provenance and exploit probability scoring from the correlation layer.
+### Exporting Endpoints
+
+Export discovered endpoints for Indago API fuzzing:
+
+```bash
+ariadne export-endpoints --session SESSION_ID -o endpoints.json
+indago scan --targets-from endpoints.json --provider anthropic
+```
 
 ### End-to-End Pipeline
 
@@ -615,7 +611,7 @@ vinculum ingest export.json --enrich-epss --format ariadne --output correlated.j
 ariadne analyze correlated.json --output report --format html --playbook
 ```
 
-See also: [Vinculum](https://github.com/Su1ph3r/vinculum) | [Reticustos](https://github.com/Su1ph3r/reticustos)
+See also: [Vinculum](https://github.com/Su1ph3r/vinculum) | [Nubicustos](https://github.com/Su1ph3r/Nubicustos) | [Reticustos](https://github.com/Su1ph3r/Reticustos) | [Indago](https://github.com/Su1ph3r/indago) | [BypassBurrito](https://github.com/Su1ph3r/bypassburrito) | [Cepheus](https://github.com/Su1ph3r/Cepheus)
 
 ## Contributing
 
