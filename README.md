@@ -10,7 +10,7 @@ Named after the mythological princess who provided Theseus with the thread to na
 
 ## Features
 
-- **Multi-Tool Ingestion**: Parse output from 45+ security tools including Nmap, BloodHound, Nuclei, CrackMapExec, Mimikatz, and more
+- **Multi-Tool Ingestion**: Parse output from 45+ security tools including Nmap, BloodHound, Nuclei, CrackMapExec, Mimikatz, Vinculum, and more
 - **Knowledge Graph**: Build a unified graph of hosts, services, users, vulnerabilities, and their relationships
 - **Attack Path Synthesis**: AI-powered identification of viable attack paths through the environment
 - **MITRE ATT&CK Mapping**: Automatic technique mapping for each attack step
@@ -18,6 +18,7 @@ Named after the mythological princess who provided Theseus with the thread to na
 - **Credential Sprawl Analysis**: Detect credential reuse across hosts and map the blast radius of compromised secrets
 - **Privilege Escalation Chaining**: Model local privilege escalation as intra-host attack paths with automatic technique mapping
 - **Operator Playbooks**: Generate executable playbooks with tool commands, OPSEC notes, fallback techniques, and detection signatures for each attack path
+- **Pipeline Integration**: Ingest deduplicated, correlated findings from [Vinculum](https://github.com/Su1ph3r/vinculum) with EPSS enrichment and multi-scanner provenance
 - **Multiple Export Formats**: HTML reports, JSON, GraphML, and Neo4j Cypher statements
 - **Web Dashboard**: Interactive UI for uploading data and visualizing results
 - **REST API**: Full API for integration with other tools and automation
@@ -187,6 +188,11 @@ curl -X POST http://localhost:8443/api/analysis/synthesize \
 | Subfinder | `subfinder` | JSON, TXT |
 | httpx | `httpx` | JSON |
 | EyeWitness | `eyewitness` | XML, JSON |
+
+### Correlation Engines
+| Tool | Parser Name | Output Formats |
+|------|-------------|----------------|
+| Vinculum | `vinculum` | JSON (`vinculum-ariadne-export`) |
 
 ### Cloud
 | Tool | Parser Name | Output Formats |
@@ -557,10 +563,59 @@ This tool is intended for authorized security testing only. Always obtain proper
 
 ---
 
-## Roadmap
+## Pipeline Integration
 
-- **Vinculum Integration**: Accept deduplicated, EPSS-enriched findings from [Vinculum](https://github.com/su1ph3r/vinculum) as an input source — Vinculum deduplicates and normalises multi-scanner output, Ariadne synthesises attack paths from the clean dataset
-- **Reticustos Pipeline**: Support end-to-end flow from Reticustos (scan orchestration) through Vinculum (correlation) into Ariadne (attack path synthesis) for a unified security analysis pipeline
+Ariadne is the downstream consumer in the Reticustos → Vinculum → Ariadne security pipeline:
+
+```
+Reticustos (scan orchestration)
+  │  Nmap, Nuclei, testssl, Nikto, Masscan, Shodan
+  │
+  ▼  JSON export
+Vinculum (correlation engine)
+  │  Deduplicate, fingerprint, EPSS enrich, correlate
+  │
+  ▼  vinculum-ariadne-export format
+Ariadne (attack path synthesis)
+     Build knowledge graph, synthesize attack paths, generate playbooks
+```
+
+### Vinculum → Ariadne
+
+```bash
+# Vinculum exports correlated findings
+vinculum ingest scan_results/* --format ariadne --output correlated.json
+
+# Ariadne ingests and builds attack paths
+ariadne analyze correlated.json --output report --format html --playbook --sprawl --privesc
+```
+
+The Vinculum parser ingests the `vinculum-ariadne-export` format containing:
+- **Hosts and services** with OS and version data
+- **Vulnerabilities** with CVE/CVSS, classified from correlated scanner findings
+- **Misconfigurations** with remediation guidance
+- **Relationships** (service→host, finding→asset) pre-built for graph construction
+- **Vinculum metadata** preserved in `raw_data`: correlation IDs, fingerprints, source tools (e.g., `reticustos:nuclei`), finding counts, and EPSS scores
+
+This enables Ariadne to build richer knowledge graphs with multi-scanner provenance and exploit probability scoring from the correlation layer.
+
+### End-to-End Pipeline
+
+```bash
+# 1. Reticustos scans the target
+curl -X POST http://localhost:8000/api/scans -d '{"profile": "full", "target_ids": [1]}'
+
+# 2. Export findings
+curl -o export.json "http://localhost:8000/api/exports/findings/json?scan_id=SCAN_ID"
+
+# 3. Vinculum correlates and deduplicates
+vinculum ingest export.json --enrich-epss --format ariadne --output correlated.json
+
+# 4. Ariadne synthesizes attack paths with operator playbooks
+ariadne analyze correlated.json --output report --format html --playbook
+```
+
+See also: [Vinculum](https://github.com/Su1ph3r/vinculum) | [Reticustos](https://github.com/Su1ph3r/reticustos)
 
 ## Contributing
 
