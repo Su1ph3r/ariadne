@@ -121,6 +121,7 @@ class ParserRegistry:
             subfinder,
             httpx,
             eyewitness,
+            vinculum,
         )
         from ariadne.parsers.cloud import (
             aws_scout,
@@ -173,6 +174,7 @@ class ParserRegistry:
             subfinder,
             httpx,
             eyewitness,
+            vinculum,
             aws_scout,
             azure_enum,
         ]:

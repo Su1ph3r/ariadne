@@ -100,6 +100,7 @@ amass = "ariadne.parsers.amass:AmassParser"
 subfinder = "ariadne.parsers.subfinder:SubfinderParser"
 httpx = "ariadne.parsers.httpx:HttpxParser"
 eyewitness = "ariadne.parsers.eyewitness:EyeWitnessParser"
+vinculum = "ariadne.parsers.vinculum:VinculumParser"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ariadne"]
