@@ -4,7 +4,33 @@ All notable changes to Ariadne will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.1] - 2025-02-09
+
 ### Added
+
+#### Credential Sprawl Analysis
+- `SprawlAnalyzer` engine module for credential reuse detection across network segments
+- Union-find clustering algorithm for grouping shared credential sets
+- `CREDENTIAL_REUSE` and `CAN_AUTH_AS` relationship types for lateral movement mapping
+- `--sprawl` / `-s` CLI flag for opt-in sprawl analysis
+- Configurable `min_reuse_count` threshold in `SprawlConfig`
+- 18 unit tests covering clustering, edge generation, and threshold filtering
+
+#### Privilege Escalation Chaining
+- `PrivescChainer` engine module for automated privilege escalation path discovery
+- Finding classification into privilege context nodes with `CAN_PRIVESC` edges
+- Support for common privesc vectors: SUID binaries, sudo misconfigurations, kernel exploits, AD abuse
+- `--privesc` CLI flag for opt-in privilege escalation analysis
+- Configurable `min_confidence` threshold in `PrivescConfig`
+- 9 unit tests covering privesc classification, chaining, and confidence filtering
+
+#### New Relationship Types
+- `CREDENTIAL_REUSE`, `CAN_AUTH_AS`, `SHARES_CRED_CLUSTER`, `CAN_PRIVESC`, `HAS_PRIV_CONTEXT`
+- `CREDENTIAL_REUSE`, `CAN_AUTH_AS`, `CAN_PRIVESC` added to `ATTACK_RELATIONSHIPS` for path scoring
+
+#### Playbook & Technique Expansion
+- 7 new playbook templates covering credential reuse, lateral auth, and privilege escalation scenarios
+- 11 new MITRE ATT&CK technique entries for sprawl and privesc coverage
 
 #### Session Management
 - Thread-safe `SessionStore` class with automatic TTL-based cleanup
