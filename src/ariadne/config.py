@@ -76,6 +76,15 @@ class WebConfig(BaseModel):
     session_ttl_hours: int = 24
 
 
+class PlaybookConfig(BaseModel):
+    """Playbook generation configuration."""
+
+    enabled: bool = False
+    llm_enhance: bool = True
+    include_detection_sigs: bool = True
+    max_fallbacks: int = 2
+
+
 class StorageConfig(BaseModel):
     """Storage configuration."""
 
@@ -125,6 +134,7 @@ class AriadneConfig(BaseSettings):
     output: OutputConfig = Field(default_factory=OutputConfig)
     web: WebConfig = Field(default_factory=WebConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
+    playbook: PlaybookConfig = Field(default_factory=PlaybookConfig)
     mitre_techniques_path: Optional[str] = None  # Path to custom MITRE techniques YAML
 
     class Config:

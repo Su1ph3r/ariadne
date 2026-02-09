@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ariadne Attack Path Report</title>
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --text-primary: #c9d1d9;
+            --text-secondary: #8b949e;
+            --accent-critical: #f85149;
+            --accent-high: #d29922;
+            --accent-medium: #58a6ff;
+            --accent-low: #3fb950;
+            --border-color: #30363d;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+
+        header {
+            text-align: center;
+            padding: 2rem 0;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 2rem;
+        }
+
+        header h1 { font-size: 2.5rem; margin-bottom: 0.5rem; }
+        header .subtitle { color: var(--text-secondary); }
+
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .stat-card .value { font-size: 2rem; font-weight: bold; }
+        .stat-card .label { color: var(--text-secondary); font-size: 0.875rem; }
+        .stat-card.critical .value { color: var(--accent-critical); }
+        .stat-card.high .value { color: var(--accent-high); }
+
+        .attack-path {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+
+        .attack-path.critical { border-left: 4px solid var(--accent-critical); }
+        .attack-path.high { border-left: 4px solid var(--accent-high); }
+        .attack-path.medium { border-left: 4px solid var(--accent-medium); }
+
+        .path-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .probability {
+            font-size: 1.25rem;
+            font-weight: bold;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            background: var(--bg-primary);
+        }
+
+        .critical .probability { color: var(--accent-critical); }
+        .high .probability { color: var(--accent-high); }
+        .medium .probability { color: var(--accent-medium); }
+
+        .description { padding: 1rem 1.5rem; color: var(--text-secondary); }
+        .steps { padding: 1rem 1.5rem; }
+
+        .step {
+            display: flex;
+            gap: 1rem;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .step:last-child { border-bottom: none; }
+
+        .step-order {
+            width: 32px;
+            height: 32px;
+            background: var(--bg-tertiary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        .step-content { flex: 1; }
+        .step-content small { color: var(--text-secondary); display: block; margin-top: 0.25rem; }
+        .technique { color: var(--accent-medium); font-size: 0.875rem; margin-left: 0.5rem; }
+
+        .llm-analysis {
+            padding: 1rem 1.5rem;
+            background: var(--bg-tertiary);
+            border-top: 1px solid var(--border-color);
+        }
+
+        .llm-analysis h4 { margin-bottom: 0.5rem; color: var(--accent-medium); }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--border-color);
+            margin-top: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Ariadne</h1>
+            <p class="subtitle">Attack Path Analysis Report</p>
+            <p class="subtitle">Generated: {{ generated_at }}</p>
+        </header>
+
+        <div class="summary">
+            <div class="stat-card">
+                <div class="value">{{ summary.total_paths }}</div>
+                <div class="label">Attack Paths</div>
+            </div>
+            <div class="stat-card critical">
+                <div class="value">{{ summary.critical_count|default(0) }}</div>
+                <div class="label">Critical Paths</div>
+            </div>
+            <div class="stat-card high">
+                <div class="value">{{ summary.high_count|default(0) }}</div>
+                <div class="label">High Risk Paths</div>
+            </div>
+            <div class="stat-card">
+                <div class="value">{{ "%.0f%%"|format(summary.avg_probability * 100) }}</div>
+                <div class="label">Avg Probability</div>
+            </div>
+        </div>
+
+        <main>
+            {% for path in paths %}
+            {% set prob_class = 'critical' if path.probability >= 0.7 else 'high' if path.probability >= 0.5 else 'medium' %}
+            <div class="attack-path {{ prob_class }}">
+                <div class="path-header">
+                    <h3>{{ loop.index }}. {{ path.name }}</h3>
+                    <span class="probability">{{ "%.0f%%"|format(path.probability * 100) }}</span>
+                </div>
+                <p class="description">{{ path.description }}</p>
+                <div class="steps">
+                    {% for step in path.steps %}
+                    <div class="step">
+                        <div class="step-order">{{ step.order + 1 }}</div>
+                        <div class="step-content">
+                            <strong>{{ step.action }}</strong>
+                            {% if step.technique %}
+                            <span class="technique">[{{ step.technique.technique_id }}]</span>
+                            {% endif %}
+                            <p>{{ step.description }}</p>
+                            <small>Probability: {{ "%.0f%%"|format(step.probability * 100) }} | Detection Risk: {{ "%.0f%%"|format(step.detection_risk * 100) }}</small>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% if path.llm_analysis %}
+                <div class="llm-analysis">
+                    <h4>AI Analysis</h4>
+                    <p>{{ path.llm_analysis }}</p>
+                </div>
+                {% endif %}
+            </div>
+            {% else %}
+            <p style="text-align: center; color: var(--text-secondary);">No attack paths found.</p>
+            {% endfor %}
+        </main>
+
+        <footer>
+            <p>Generated by Ariadne Attack Path Synthesizer v0.1.0</p>
+            <p>Follow the thread through the labyrinth.</p>
+        </footer>
+    </div>
+</body>
+</html>

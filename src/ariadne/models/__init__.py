@@ -4,6 +4,7 @@ from ariadne.models.asset import Host, Service, User, CloudResource, Asset
 from ariadne.models.finding import Vulnerability, Misconfiguration, Credential, Finding
 from ariadne.models.relationship import Relationship, RelationType
 from ariadne.models.attack_path import AttackPath, AttackStep, AttackTechnique
+from ariadne.models.playbook import Playbook, PlaybookStep, PlaybookCommand
 
 __all__ = [
     "Asset",
@@ -20,4 +21,7 @@ __all__ = [
     "AttackPath",
     "AttackStep",
     "AttackTechnique",
+    "Playbook",
+    "PlaybookStep",
+    "PlaybookCommand",
 ]

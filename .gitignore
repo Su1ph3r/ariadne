@@ -62,6 +62,7 @@ config.yml
 !tests/fixtures/**/*.xml
 reports/
 output/
+!src/ariadne/output/
 
 # OS
 .DS_Store

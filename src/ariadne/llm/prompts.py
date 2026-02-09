@@ -141,6 +141,66 @@ Write a detailed narrative that:
 
 Write in the style of a penetration test report finding."""
 
+    PLAYBOOK_STEP_GENERATION = """Generate an operator playbook step for the following attack action.
+
+## Attack Step Context
+{step_context}
+
+Generate specific, executable commands that an operator would run to perform this step. Include:
+1. Primary command(s) with the exact tool and syntax
+2. Fallback commands if the primary approach fails
+3. Prerequisites that must be met
+4. OPSEC notes for stealth
+5. Expected output
+6. Detection signatures that defenders would see
+
+Respond in JSON format:
+{{
+    "commands": [
+        {{
+            "tool": "tool-name",
+            "command": "exact command to run",
+            "description": "What this command does",
+            "requires_root": false,
+            "requires_implant": false
+        }}
+    ],
+    "fallback_commands": [
+        {{
+            "tool": "alt-tool",
+            "command": "fallback command",
+            "description": "Alternative approach",
+            "requires_root": false,
+            "requires_implant": false
+        }}
+    ],
+    "prerequisites": ["Prerequisite 1"],
+    "opsec_notes": ["OPSEC note 1"],
+    "expected_output": "What the operator should see",
+    "detection_signatures": ["Detection signature 1"]
+}}"""
+
+    PLAYBOOK_OPSEC_ENHANCEMENT = """Review the following operator playbook and enhance it with OPSEC guidance.
+
+## Playbook
+{playbook_context}
+
+For each step, provide:
+1. Additional OPSEC notes specific to the attack chain context
+2. Additional detection signatures that defenders should monitor
+3. Global OPSEC recommendations for the entire operation
+
+Respond in JSON format:
+{{
+    "global_opsec_notes": ["Global OPSEC note 1"],
+    "steps": [
+        {{
+            "additional_opsec_notes": ["Step-specific OPSEC note"],
+            "additional_detection_signatures": ["Detection signature"]
+        }}
+    ]
+}}"""
+
     REMEDIATION_SUGGESTIONS = """Provide remediation recommendations for the following attack path.
 
 ## Attack Path
@@ -222,3 +282,13 @@ Respond in JSON format:
             steps=steps,
             findings=findings,
         )
+
+    @classmethod
+    def format_playbook_step_generation(cls, step_context: str) -> str:
+        """Format the playbook step generation prompt."""
+        return cls.PLAYBOOK_STEP_GENERATION.format(step_context=step_context)
+
+    @classmethod
+    def format_playbook_opsec_enhancement(cls, playbook_context: str) -> str:
+        """Format the playbook OPSEC enhancement prompt."""
+        return cls.PLAYBOOK_OPSEC_ENHANCEMENT.format(playbook_context=playbook_context)

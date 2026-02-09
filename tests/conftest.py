@@ -15,6 +15,7 @@ from ariadne.models.asset import Host, Service, User, CloudResource
 from ariadne.models.finding import Vulnerability, Misconfiguration, Credential
 from ariadne.models.relationship import Relationship, RelationType
 from ariadne.models.attack_path import AttackPath, AttackStep, AttackTechnique
+from ariadne.models.playbook import Playbook, PlaybookStep, PlaybookCommand
 
 
 # =============================================================================
@@ -710,3 +711,55 @@ def sample_entities(
         sample_admin_relationship,
         sample_can_rdp_relationship,
     ]
+
+
+# =============================================================================
+# Playbook Fixtures
+# =============================================================================
+
+
+@pytest.fixture
+def sample_playbook_command() -> PlaybookCommand:
+    """Create a sample PlaybookCommand."""
+    return PlaybookCommand(
+        tool="impacket-psexec",
+        command="psexec.py 'CORP/admin:Password123!@192.168.1.100'",
+        description="PsExec for SYSTEM shell via admin access",
+        requires_root=False,
+        requires_implant=False,
+    )
+
+
+@pytest.fixture
+def sample_playbook_step(sample_playbook_command: PlaybookCommand) -> PlaybookStep:
+    """Create a sample PlaybookStep."""
+    return PlaybookStep(
+        order=0,
+        attack_step_id="step-001",
+        commands=[sample_playbook_command],
+        prerequisites=["Admin credentials", "Network access to port 445"],
+        opsec_notes=["PsExec creates a service (Event 7045)"],
+        fallback_commands=[
+            PlaybookCommand(
+                tool="impacket-wmiexec",
+                command="wmiexec.py 'CORP/admin:Password123!@192.168.1.100'",
+                description="WMIExec — stealthier than PsExec",
+            )
+        ],
+        expected_output="SYSTEM shell on target host",
+        detection_signatures=["Windows Event 7045"],
+        source="template",
+    )
+
+
+@pytest.fixture
+def sample_playbook(sample_playbook_step: PlaybookStep) -> Playbook:
+    """Create a sample Playbook."""
+    return Playbook(
+        attack_path_id="path-001",
+        steps=[sample_playbook_step],
+        global_prerequisites=["Admin credentials", "Network access to port 445"],
+        global_opsec_notes=["PsExec creates a service (Event 7045)"],
+        estimated_time="15-30 minutes",
+        complexity="low",
+    )

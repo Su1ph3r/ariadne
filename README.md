@@ -15,6 +15,7 @@ Named after the mythological princess who provided Theseus with the thread to na
 - **Attack Path Synthesis**: AI-powered identification of viable attack paths through the environment
 - **MITRE ATT&CK Mapping**: Automatic technique mapping for each attack step
 - **Risk Scoring**: Probability-based scoring considering CVSS, exploit availability, network position, and detection likelihood
+- **Operator Playbooks**: Generate executable playbooks with tool commands, OPSEC notes, fallback techniques, and detection signatures for each attack path
 - **Multiple Export Formats**: HTML reports, JSON, GraphML, and Neo4j Cypher statements
 - **Web Dashboard**: Interactive UI for uploading data and visualizing results
 - **REST API**: Full API for integration with other tools and automation
@@ -77,6 +78,9 @@ ariadne analyze ./scan_data/ --output report --format html
 
 # Export to JSON
 ariadne analyze ./scan_data/ --output results --format json
+
+# Generate operator playbooks alongside attack paths
+ariadne analyze ./scan_data/ --output report --format html --playbook
 ```
 
 ### Web Interface
@@ -239,23 +243,94 @@ export ARIADNE_HOME=/opt/ariadne
 
 ---
 
+## Operator Playbooks
+
+Ariadne can generate executable operator playbooks for each discovered attack path. Playbooks transform abstract attack paths into step-by-step instructions with specific tool commands, OPSEC considerations, fallback techniques, and detection signatures.
+
+### Generating Playbooks
+
+```bash
+# Add --playbook (-p) to any analyze command
+ariadne analyze ./scan_data/ --output report --format html --playbook
+
+# Playbooks are embedded in both HTML and JSON reports
+ariadne analyze ./scan_data/ --output results --format json --playbook
+```
+
+### What Playbooks Include
+
+Each playbook step contains:
+
+- **Tool Commands**: Executable commands for tools like Impacket, CrackMapExec, Certipy, Evil-WinRM, and more
+- **Prerequisites**: What access or tools are needed before execution
+- **OPSEC Notes**: Operational security considerations (noise level, log artifacts, detection risk)
+- **Fallback Commands**: Alternative approaches if the primary command fails
+- **Expected Output**: What successful execution looks like
+- **Detection Signatures**: Indicators that defenders might use to detect the activity
+
+### Coverage
+
+Playbooks cover attack techniques across all domains:
+
+| Domain | Techniques |
+|--------|-----------|
+| **Active Directory** | DCSync, DACL abuse (GenericAll, GenericWrite, WriteDacl, WriteOwner), Kerberoasting, ADCS abuse, LAPS/gMSA reading, forced password change, group membership manipulation |
+| **Network** | SSH, RDP, WinRM/PSRemote, SMB lateral movement (PsExec, WmiExec), vulnerability exploitation |
+| **Cloud** | AWS STS AssumeRole, Azure role escalation, IAM permission abuse |
+| **Sessions** | Pass-the-Hash, credential reuse |
+
+### Two-Tier Generation
+
+1. **Deterministic Templates**: Known `RelationType` values (e.g., `HAS_GENERIC_ALL`, `CAN_SSH`, `CAN_ASSUME`) are mapped to pre-built command templates with proper placeholders for target IPs, domains, usernames, and credentials.
+
+2. **LLM Enhancement** (optional): When an LLM provider is configured, Ariadne can enhance template-generated playbooks with contextual OPSEC notes and fill in commands for novel attack patterns not covered by templates.
+
+### Playbook Configuration
+
+```yaml
+# config.yaml
+playbook:
+  enabled: false             # Enable playbook generation (or use --playbook flag)
+  llm_enhance: true          # Use LLM to add OPSEC context and fill gaps
+  include_detection_sigs: true  # Include detection signatures in output
+  max_fallbacks: 2           # Maximum fallback commands per step
+```
+
+### Placeholder Handling
+
+Playbook commands use placeholders like `{target_ip}`, `{domain}`, `{username}`, and `{hash}` that are automatically filled from the knowledge graph. When entity data is unavailable, placeholders remain in the output as-is (e.g., `{target_ip}`) for the operator to fill manually.
+
+---
+
 ## Architecture
 
 ```
 Input Files --> Parsers --> Entities --> Graph Builder --> NetworkX Graph
                                                               |
                                                               v
-HTML/JSON Report <-- Scoring <-- LLM Enrichment <-- Path Finding
+                                                         Path Finding
+                                                              |
+                                                              v
+                                                      LLM Enrichment
+                                                              |
+                                                              v
+                                                          Scoring
+                                                              |
+                                              +---------------+---------------+
+                                              |                               |
+                                              v                               v
+                                     Playbook Generator              HTML/JSON Report
+                                    (template + LLM)                 (with playbooks)
 ```
 
 ### Core Components
 
 - **Parsers** (`ariadne.parsers`): Plugin-based system that normalizes tool output into unified entity models
-- **Models** (`ariadne.models`): Pydantic models for assets (Host, Service, User), findings (Vulnerability, Credential), and relationships
+- **Models** (`ariadne.models`): Pydantic models for assets (Host, Service, User), findings (Vulnerability, Credential), relationships, and playbooks
 - **Graph** (`ariadne.graph`): NetworkX-based knowledge graph with attack-relevant edge types
-- **Engine** (`ariadne.engine`): Orchestrates parsing, graph building, path finding, and scoring
-- **LLM** (`ariadne.llm`): LiteLLM wrapper supporting multiple providers for AI-powered analysis
-- **Output** (`ariadne.output`): Report generators for HTML, JSON, and graph formats
+- **Engine** (`ariadne.engine`): Orchestrates parsing, graph building, path finding, scoring, and playbook generation
+- **LLM** (`ariadne.llm`): LiteLLM wrapper supporting multiple providers for AI-powered analysis and playbook enhancement
+- **Output** (`ariadne.output`): Report generators for HTML, JSON, and graph formats with integrated playbook sections
 
 ---
 

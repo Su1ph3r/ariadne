@@ -52,6 +52,9 @@ def analyze(
     config: Annotated[
         Optional[Path], typer.Option("--config", "-c", help="Config file path")
     ] = None,
+    playbook: Annotated[
+        bool, typer.Option("--playbook", "-p", help="Generate operator playbooks for attack paths")
+    ] = False,
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="Validate inputs without full analysis")
     ] = False,
@@ -72,6 +75,8 @@ def analyze(
     cfg = load_config(config)
     if llm:
         cfg.llm.model = llm
+    if playbook:
+        cfg.playbook.enabled = True
 
     synthesizer = Synthesizer(cfg)
 
@@ -103,8 +108,14 @@ def analyze(
             console.print(f"   → {step.description}")
         console.print()
 
+    playbooks = None
+    if cfg.playbook.enabled and attack_paths:
+        with console.status("[bold yellow]Generating operator playbooks..."):
+            playbooks = synthesizer.generate_playbooks(attack_paths)
+        console.print(f"[bold yellow]Generated {len(playbooks)} playbooks[/]\n")
+
     if output:
-        synthesizer.export(attack_paths, output, format=format)
+        synthesizer.export(attack_paths, output, format=format, playbooks=playbooks)
         console.print(f"[green]Report saved to:[/] {output}")
 
 

@@ -11,6 +11,7 @@ from ariadne.graph.store import GraphStore
 from ariadne.llm.client import LLMClient
 from ariadne.llm.prompts import PromptTemplates
 from ariadne.models.attack_path import AttackPath, AttackStep, AttackTechnique
+from ariadne.models.playbook import Playbook
 from ariadne.parsers.registry import ParserRegistry
 from ariadne.engine.scoring import PathScorer
 
@@ -294,8 +295,20 @@ class Synthesizer:
 - {stats.get('findings', 0)} findings
 - {stats.get('total_edges', 0)} relationships"""
 
+    def generate_playbooks(self, paths: list[AttackPath]) -> list[Playbook]:
+        """Generate operator playbooks for the given attack paths."""
+        from ariadne.engine.playbook import PlaybookGenerator
+
+        llm = self.llm if self.config.playbook.llm_enhance else None
+        generator = PlaybookGenerator(self.config, self.store, llm)
+        return generator.generate(paths)
+
     def export(
-        self, paths: list[AttackPath], output_path: Path, format: str = "html"
+        self,
+        paths: list[AttackPath],
+        output_path: Path,
+        format: str = "html",
+        playbooks: list[Playbook] | None = None,
     ) -> None:
         """Export attack paths to a report file."""
         if format == "json":
@@ -307,4 +320,4 @@ class Synthesizer:
         else:
             raise ValueError(f"Unknown format: {format}")
 
-        reporter.generate(paths, output_path, self.store.stats())
+        reporter.generate(paths, output_path, self.store.stats(), playbooks=playbooks)

@@ -40,6 +40,23 @@ All notable changes to Ariadne will be documented in this file.
 - Fallback to built-in defaults when no config provided
 - New `mitre_techniques_path` config option
 
+#### Operator Playbook Generation
+- `PlaybookGenerator` engine module that converts attack paths into executable operator playbooks
+- Deterministic template database covering 20+ attack relationship types across AD, network, cloud, and session domains
+- `SafeFormatDict` for safe placeholder rendering — unfilled `{placeholders}` remain as-is for manual completion
+- Two-tier lookup: `(RelationType, technique_id)` → `(RelationType, None)` → LLM fallback → manual fallback
+- Technique-specific template variants for Kerberoasting (T1558.003) and ADCS certificate abuse
+- LLM-powered step generation for unrecognized attack patterns via `LLMClient.complete_json()`
+- LLM-powered OPSEC enhancement that adds contextual security notes and detection signatures to template-generated playbooks
+- `--playbook` / `-p` CLI flag for opt-in playbook generation during analysis
+- Playbook sections embedded in both HTML and JSON report outputs
+- Pydantic models: `Playbook`, `PlaybookStep`, `PlaybookCommand` with full serialization support
+- `PlaybookConfig` with options: `enabled`, `llm_enhance`, `include_detection_sigs`, `max_fallbacks`
+- Entity context resolution from GraphStore: host IPs, domains, usernames, credentials, vulnerability data
+- Collapsible playbook UI in HTML reports with styled command blocks, OPSEC callouts, and detection signature sections
+- HTML escaping on all user-controlled data in report output
+- 46 unit tests covering template resolution, entity context, step generation, LLM fallback, and full playbook generation
+
 ### Changed
 
 #### Memory Optimization
@@ -69,9 +86,29 @@ scoring:
   max_paths_per_query: 100     # Maximum paths to return
 ```
 
+### New PlaybookConfig Options
+```yaml
+playbook:
+  enabled: false              # Enable playbook generation (or use --playbook flag)
+  llm_enhance: true           # Use LLM to add OPSEC context and fill gaps
+  include_detection_sigs: true  # Include detection signatures in output
+  max_fallbacks: 2            # Maximum fallback commands per step
+```
+
 ### New AriadneConfig Options
 ```yaml
 mitre_techniques_path: null    # Path to custom MITRE techniques YAML
+```
+
+## CLI Changes
+
+### `ariadne analyze`
+
+New flag:
+- `--playbook` / `-p` (bool, default: false) - Generate operator playbooks for each discovered attack path
+
+```bash
+ariadne analyze ./scan_data/ --output report --format html --playbook
 ```
 
 ## API Changes
