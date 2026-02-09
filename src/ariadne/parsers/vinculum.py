@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Generator
 
-from ariadne.models.asset import Host, Service
+from ariadne.models.asset import Host, Service, CloudResource, Container, MobileApp, ApiEndpoint
 from ariadne.models.finding import Misconfiguration, Vulnerability
 from ariadne.models.relationship import Relationship, RelationType
 from ariadne.parsers.base import BaseParser, Entity
@@ -23,7 +23,8 @@ class VinculumParser(BaseParser):
     name = "vinculum"
     description = "Parse Vinculum correlated security findings"
     file_patterns = ["*vinculum*.json", "vinculum_*.json"]
-    entity_types = ["Host", "Service", "Vulnerability", "Misconfiguration", "Relationship"]
+    entity_types = ["Host", "Service", "Vulnerability", "Misconfiguration", "Relationship",
+                     "CloudResource", "Container", "MobileApp", "ApiEndpoint"]
 
     def parse(self, file_path: Path) -> Generator[Entity, None, None]:
         """Parse a Vinculum ariadne-export file and yield entities."""
@@ -84,6 +85,36 @@ class VinculumParser(BaseParser):
                         relation_type=RelationType.HAS_MISCONFIGURATION,
                         source="vinculum",
                     )
+
+        # Yield cloud resources (v1.1)
+        for cr_data in data.get("cloud_resources", []):
+            cloud_resource = self._parse_cloud_resource(cr_data)
+            if cloud_resource:
+                yield cloud_resource
+
+        # Yield containers (v1.1)
+        for container_data in data.get("containers", []):
+            container = self._parse_container(container_data)
+            if container:
+                yield container
+
+        # Yield mobile apps (v1.1)
+        for app_data in data.get("mobile_apps", []):
+            mobile_app = self._parse_mobile_app(app_data)
+            if mobile_app:
+                yield mobile_app
+
+        # Yield API endpoints (v1.1)
+        for ep_data in data.get("api_endpoints", []):
+            api_endpoint = self._parse_api_endpoint(ep_data)
+            if api_endpoint:
+                yield api_endpoint
+
+        # Yield relationships
+        for rel_data in data.get("relationships", []):
+            rel = self._parse_relationship(rel_data)
+            if rel:
+                yield rel
 
     def _parse_host(self, data: dict) -> Host | None:
         """Parse a host entry."""
@@ -161,6 +192,88 @@ class VinculumParser(BaseParser):
             affected_asset_id=asset_id,
             source="vinculum",
             raw_data=vinculum_meta,
+        )
+
+    def _parse_cloud_resource(self, data: dict) -> CloudResource | None:
+        """Parse a cloud resource entry."""
+        resource_id = data.get("resource_id") or data.get("id")
+        if not resource_id:
+            return None
+
+        return CloudResource(
+            resource_id=resource_id,
+            resource_type=data.get("type", "unknown"),
+            name=data.get("name"),
+            provider=data.get("provider", "unknown"),
+            region=data.get("region"),
+            account_id=data.get("account_id"),
+            source="vinculum",
+        )
+
+    def _parse_container(self, data: dict) -> Container | None:
+        """Parse a container entry."""
+        container_id = data.get("id") or data.get("container_id")
+        if not container_id:
+            return None
+
+        return Container(
+            container_id=container_id,
+            image=data.get("image"),
+            registry=data.get("registry"),
+            runtime=data.get("runtime"),
+            namespace=data.get("namespace"),
+            privileged=data.get("privileged", False),
+            escape_chain_id=data.get("escape_chain_id"),
+            source="vinculum",
+        )
+
+    def _parse_mobile_app(self, data: dict) -> MobileApp | None:
+        """Parse a mobile app entry."""
+        app_id = data.get("app_id") or data.get("id")
+        if not app_id:
+            return None
+
+        return MobileApp(
+            app_id=app_id,
+            name=data.get("name"),
+            platform=data.get("platform"),
+            version=data.get("version"),
+            source="vinculum",
+        )
+
+    def _parse_api_endpoint(self, data: dict) -> ApiEndpoint | None:
+        """Parse an API endpoint entry."""
+        path = data.get("path")
+        if not path:
+            return None
+
+        return ApiEndpoint(
+            method=data.get("method", "GET"),
+            path=path,
+            base_url=data.get("base_url"),
+            parameters=data.get("parameters", []),
+            source="vinculum",
+        )
+
+    def _parse_relationship(self, data: dict) -> Relationship | None:
+        """Parse a relationship entry."""
+        source_key = data.get("source_key")
+        target_key = data.get("target_key")
+        rel_type = data.get("relation_type")
+
+        if not source_key or not target_key or not rel_type:
+            return None
+
+        try:
+            relation_type = RelationType(rel_type)
+        except ValueError:
+            return None
+
+        return Relationship(
+            source_id=source_key,
+            target_id=target_key,
+            relation_type=relation_type,
+            source="vinculum",
         )
 
     def _build_asset_id(self, host_ip: str | None, port: int | None, protocol: str | None) -> str | None:

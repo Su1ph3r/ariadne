@@ -126,3 +126,46 @@ class CloudResource(Asset):
     def display_name(self) -> str:
         """Human-readable resource identifier."""
         return self.name or self.resource_id
+
+
+class Container(Asset):
+    """A container instance."""
+
+    container_id: str
+    image: Optional[str] = None
+    registry: Optional[str] = None
+    runtime: Optional[str] = None
+    namespace: Optional[str] = None
+    privileged: bool = False
+    host_id: Optional[str] = None
+    escape_chain_id: Optional[str] = None
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.id:
+            self.id = f"container:{self.container_id}"
+
+
+class MobileApp(Asset):
+    """A mobile application."""
+
+    app_id: str
+    name: Optional[str] = None
+    platform: Optional[str] = None  # ios, android
+    version: Optional[str] = None
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.id:
+            self.id = f"mobile:{self.app_id}"
+
+
+class ApiEndpoint(Asset):
+    """An API endpoint."""
+
+    method: str = "GET"
+    path: str = "/"
+    base_url: Optional[str] = None
+    parameters: list[str] = Field(default_factory=list)
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.id:
+            self.id = f"api:{self.method}:{self.base_url or ''}{self.path}"

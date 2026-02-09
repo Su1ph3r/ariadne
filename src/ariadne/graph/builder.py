@@ -4,7 +4,7 @@ from typing import Any, Iterator, Union
 
 import networkx as nx
 
-from ariadne.models.asset import Asset, Host, Service, User, CloudResource
+from ariadne.models.asset import Asset, Host, Service, User, CloudResource, Container, MobileApp, ApiEndpoint
 from ariadne.models.finding import Finding, Vulnerability, Misconfiguration, Credential
 from ariadne.models.relationship import Relationship, RelationType, ATTACK_RELATIONSHIPS
 
@@ -24,6 +24,9 @@ class GraphBuilder:
         self._services: dict[str, Service] = {}
         self._users: dict[str, User] = {}
         self._cloud_resources: dict[str, CloudResource] = {}
+        self._containers: dict[str, Container] = {}
+        self._mobile_apps: dict[str, MobileApp] = {}
+        self._api_endpoints: dict[str, ApiEndpoint] = {}
         self._findings: dict[str, Finding] = {}
 
     def add_entity(self, entity: Entity) -> None:
@@ -34,6 +37,12 @@ class GraphBuilder:
             self._add_service(entity)
         elif isinstance(entity, User):
             self._add_user(entity)
+        elif isinstance(entity, Container):
+            self._add_container(entity)
+        elif isinstance(entity, MobileApp):
+            self._add_mobile_app(entity)
+        elif isinstance(entity, ApiEndpoint):
+            self._add_api_endpoint(entity)
         elif isinstance(entity, CloudResource):
             self._add_cloud_resource(entity)
         elif isinstance(entity, (Vulnerability, Misconfiguration, Credential)):
@@ -103,6 +112,43 @@ class GraphBuilder:
             resource_type=resource.resource_type,
             provider=resource.provider,
             region=resource.region,
+        )
+
+    def _add_container(self, container: Container) -> None:
+        """Add a container node to the graph."""
+        self._containers[container.id] = container
+        self.graph.add_node(
+            container.id,
+            type="container",
+            label=container.image or container.container_id,
+            container_id=container.container_id,
+            image=container.image,
+            runtime=container.runtime,
+            privileged=container.privileged,
+        )
+
+    def _add_mobile_app(self, app: MobileApp) -> None:
+        """Add a mobile app node to the graph."""
+        self._mobile_apps[app.id] = app
+        self.graph.add_node(
+            app.id,
+            type="mobile_app",
+            label=app.name or app.app_id,
+            app_id=app.app_id,
+            platform=app.platform,
+            version=app.version,
+        )
+
+    def _add_api_endpoint(self, endpoint: ApiEndpoint) -> None:
+        """Add an API endpoint node to the graph."""
+        self._api_endpoints[endpoint.id] = endpoint
+        self.graph.add_node(
+            endpoint.id,
+            type="api_endpoint",
+            label=f"{endpoint.method} {endpoint.path}",
+            method=endpoint.method,
+            path=endpoint.path,
+            base_url=endpoint.base_url,
         )
 
     def _add_finding(self, finding: Finding) -> None:
@@ -178,6 +224,12 @@ class GraphBuilder:
             return self._users[node_id].model_dump()
         if node_id in self._cloud_resources:
             return self._cloud_resources[node_id].model_dump()
+        if node_id in self._containers:
+            return self._containers[node_id].model_dump()
+        if node_id in self._mobile_apps:
+            return self._mobile_apps[node_id].model_dump()
+        if node_id in self._api_endpoints:
+            return self._api_endpoints[node_id].model_dump()
         if node_id in self._findings:
             return self._findings[node_id].model_dump()
         return None
@@ -199,6 +251,12 @@ class GraphBuilder:
             return self._users[node_id]
         if node_id in self._cloud_resources:
             return self._cloud_resources[node_id]
+        if node_id in self._containers:
+            return self._containers[node_id]
+        if node_id in self._mobile_apps:
+            return self._mobile_apps[node_id]
+        if node_id in self._api_endpoints:
+            return self._api_endpoints[node_id]
         if node_id in self._findings:
             return self._findings[node_id]
         return None

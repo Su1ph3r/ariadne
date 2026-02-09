@@ -53,6 +53,11 @@ class RelationType(str, Enum):
     RESOLVES_TO = "resolves_to"
     RELATED_TO = "related_to"
 
+    HAS_CLOUD_VULNERABILITY = "has_cloud_vulnerability"
+    HAS_CONTAINER_ESCAPE = "has_container_escape"
+    HAS_MOBILE_VULNERABILITY = "has_mobile_vulnerability"
+    HAS_API_VULNERABILITY = "has_api_vulnerability"
+
 
 ATTACK_RELATIONSHIPS = {
     RelationType.CAN_REACH,

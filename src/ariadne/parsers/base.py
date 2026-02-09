@@ -5,11 +5,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Generator, Union
 
-from ariadne.models.asset import Host, Service, User, CloudResource
+from ariadne.models.asset import Host, Service, User, CloudResource, Container, MobileApp, ApiEndpoint
 from ariadne.models.finding import Vulnerability, Misconfiguration, Credential
 from ariadne.models.relationship import Relationship
 
-Entity = Union[Host, Service, User, CloudResource, Vulnerability, Misconfiguration, Credential, Relationship]
+Entity = Union[Host, Service, User, CloudResource, Container, MobileApp, ApiEndpoint, Vulnerability, Misconfiguration, Credential, Relationship]
 
 
 @dataclass

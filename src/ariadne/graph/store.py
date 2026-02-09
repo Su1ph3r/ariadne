@@ -6,7 +6,7 @@ from typing import Any, Iterator, Union
 
 import networkx as nx
 
-from ariadne.models.asset import Asset
+from ariadne.models.asset import Asset, Service
 from ariadne.models.finding import Finding
 from ariadne.models.relationship import Relationship
 from ariadne.graph.builder import GraphBuilder
@@ -42,6 +42,20 @@ class GraphStore:
         """Build the graph from an iterator of entities."""
         self._builder.add_entities(entities)
         self._graph = None
+
+    def get_all_entities(self) -> list[Entity]:
+        """Get all stored entity objects."""
+        entities: list[Entity] = []
+        b = self._builder
+        entities.extend(b._hosts.values())
+        entities.extend(b._services.values())
+        entities.extend(b._users.values())
+        entities.extend(b._cloud_resources.values())
+        entities.extend(b._containers.values())
+        entities.extend(b._mobile_apps.values())
+        entities.extend(b._api_endpoints.values())
+        entities.extend(b._findings.values())
+        return entities
 
     def clear(self) -> None:
         """Clear the graph."""

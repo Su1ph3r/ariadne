@@ -5,7 +5,7 @@ import json
 import pytest
 from pathlib import Path
 
-from ariadne.models.asset import Host, Service
+from ariadne.models.asset import Host, Service, CloudResource, Container, MobileApp, ApiEndpoint
 from ariadne.models.finding import Misconfiguration, Vulnerability
 from ariadne.models.relationship import Relationship, RelationType
 from ariadne.parsers.vinculum import VinculumParser
@@ -207,7 +207,7 @@ class TestVinculumParser:
         rels = [e for e in entities if isinstance(e, Relationship)]
         runs_on = [r for r in rels if r.relation_type == RelationType.RUNS_ON]
 
-        assert len(runs_on) == 2  # One per service
+        assert len(runs_on) == 3  # Two from services inline + one from relationships array
 
     def test_parse_yields_has_vulnerability_relationships(self, sample_file: Path):
         parser = VinculumParser()
@@ -234,3 +234,258 @@ class TestVinculumParser:
         assert len(result.services) == 2
         assert len(result.vulnerabilities) == 2
         assert len(result.relationships) > 0
+
+
+SAMPLE_V11_EXPORT = {
+    "format": "vinculum-ariadne-export",
+    "version": "1.1",
+    "metadata": {
+        "generated_at": "2025-06-01T12:00:00Z",
+        "vinculum_version": "0.2.0",
+    },
+    "hosts": [
+        {"ip": "10.0.0.1", "hostname": "api.example.com"},
+    ],
+    "services": [
+        {
+            "port": 443,
+            "protocol": "tcp",
+            "name": "https",
+            "host_ip": "10.0.0.1",
+        },
+    ],
+    "vulnerabilities": [],
+    "misconfigurations": [],
+    "cloud_resources": [
+        {
+            "resource_id": "arn:aws:s3:::my-bucket",
+            "type": "s3-bucket",
+            "name": "my-bucket",
+            "provider": "aws",
+            "region": "us-east-1",
+            "account_id": "123456789012",
+        },
+        {
+            "resource_id": "arn:aws:ec2:us-east-1:123456789012:instance/i-abc",
+            "type": "ec2-instance",
+            "provider": "aws",
+            "region": "us-east-1",
+        },
+    ],
+    "containers": [
+        {
+            "id": "container-abc123",
+            "image": "nginx:latest",
+            "runtime": "docker",
+            "namespace": "default",
+            "privileged": True,
+        },
+        {
+            "container_id": "container-def456",
+            "image": "redis:7",
+            "registry": "docker.io",
+            "privileged": False,
+        },
+    ],
+    "mobile_apps": [
+        {
+            "app_id": "com.example.app",
+            "name": "Example App",
+            "platform": "android",
+            "version": "2.1.0",
+        },
+    ],
+    "api_endpoints": [
+        {
+            "path": "/api/users",
+            "method": "GET",
+            "base_url": "https://api.example.com",
+            "parameters": ["id", "page"],
+        },
+        {
+            "path": "/api/users",
+            "method": "POST",
+            "base_url": "https://api.example.com",
+            "parameters": [],
+        },
+    ],
+    "relationships": [
+        {
+            "source_key": "cloud:aws:s3-bucket:arn:aws:s3:::my-bucket",
+            "target_key": "vuln:s3-public",
+            "relation_type": "has_cloud_vulnerability",
+        },
+    ],
+}
+
+
+@pytest.fixture
+def v11_sample_file(tmp_path: Path) -> Path:
+    """Create a v1.1 Vinculum export file."""
+    filepath = tmp_path / "vinculum_v11_export.json"
+    filepath.write_text(json.dumps(SAMPLE_V11_EXPORT, indent=2))
+    return filepath
+
+
+class TestVinculumParserV11:
+    """Test VinculumParser v1.1 entity handling."""
+
+    def test_parser_entity_types_include_v11(self):
+        parser = VinculumParser()
+        assert "CloudResource" in parser.entity_types
+        assert "Container" in parser.entity_types
+        assert "MobileApp" in parser.entity_types
+        assert "ApiEndpoint" in parser.entity_types
+
+    def test_parse_cloud_resources(self, v11_sample_file: Path):
+        parser = VinculumParser()
+        entities = list(parser.parse(v11_sample_file))
+        cloud = [e for e in entities if isinstance(e, CloudResource)]
+
+        assert len(cloud) == 2
+
+        bucket = next(c for c in cloud if "s3" in c.resource_type)
+        assert bucket.resource_id == "arn:aws:s3:::my-bucket"
+        assert bucket.resource_type == "s3-bucket"
+        assert bucket.name == "my-bucket"
+        assert bucket.provider == "aws"
+        assert bucket.region == "us-east-1"
+        assert bucket.account_id == "123456789012"
+        assert bucket.source == "vinculum"
+
+    def test_parse_containers(self, v11_sample_file: Path):
+        parser = VinculumParser()
+        entities = list(parser.parse(v11_sample_file))
+        containers = [e for e in entities if isinstance(e, Container)]
+
+        assert len(containers) == 2
+
+        nginx = next(c for c in containers if c.image == "nginx:latest")
+        assert nginx.container_id == "container-abc123"
+        assert nginx.runtime == "docker"
+        assert nginx.namespace == "default"
+        assert nginx.privileged is True
+        assert nginx.source == "vinculum"
+
+        redis = next(c for c in containers if c.image == "redis:7")
+        assert redis.container_id == "container-def456"
+        assert redis.registry == "docker.io"
+        assert redis.privileged is False
+
+    def test_parse_mobile_apps(self, v11_sample_file: Path):
+        parser = VinculumParser()
+        entities = list(parser.parse(v11_sample_file))
+        apps = [e for e in entities if isinstance(e, MobileApp)]
+
+        assert len(apps) == 1
+        app = apps[0]
+        assert app.app_id == "com.example.app"
+        assert app.name == "Example App"
+        assert app.platform == "android"
+        assert app.version == "2.1.0"
+        assert app.source == "vinculum"
+
+    def test_parse_api_endpoints(self, v11_sample_file: Path):
+        parser = VinculumParser()
+        entities = list(parser.parse(v11_sample_file))
+        endpoints = [e for e in entities if isinstance(e, ApiEndpoint)]
+
+        assert len(endpoints) == 2
+
+        get_ep = next(e for e in endpoints if e.method == "GET")
+        assert get_ep.path == "/api/users"
+        assert get_ep.base_url == "https://api.example.com"
+        assert get_ep.parameters == ["id", "page"]
+        assert get_ep.source == "vinculum"
+
+        post_ep = next(e for e in endpoints if e.method == "POST")
+        assert post_ep.path == "/api/users"
+        assert post_ep.parameters == []
+
+    def test_parse_v11_relationships(self, v11_sample_file: Path):
+        parser = VinculumParser()
+        entities = list(parser.parse(v11_sample_file))
+        rels = [e for e in entities if isinstance(e, Relationship)]
+        cloud_vuln_rels = [r for r in rels if r.relation_type == RelationType.HAS_CLOUD_VULNERABILITY]
+
+        assert len(cloud_vuln_rels) == 1
+        assert cloud_vuln_rels[0].source_id == "cloud:aws:s3-bucket:arn:aws:s3:::my-bucket"
+        assert cloud_vuln_rels[0].target_id == "vuln:s3-public"
+
+    def test_v11_backward_compatible_with_v10(self, v11_sample_file: Path):
+        """v1.1 files should still yield hosts, services, and relationships."""
+        parser = VinculumParser()
+        entities = list(parser.parse(v11_sample_file))
+
+        hosts = [e for e in entities if isinstance(e, Host)]
+        services = [e for e in entities if isinstance(e, Service)]
+
+        assert len(hosts) == 1
+        assert hosts[0].ip == "10.0.0.1"
+        assert len(services) == 1
+        assert services[0].port == 443
+
+    def test_empty_v11_sections_ok(self, tmp_path: Path):
+        """v1.1 with empty new sections should parse without errors."""
+        data = {
+            "format": "vinculum-ariadne-export",
+            "version": "1.1",
+            "hosts": [],
+            "services": [],
+            "vulnerabilities": [],
+            "misconfigurations": [],
+            "cloud_resources": [],
+            "containers": [],
+            "mobile_apps": [],
+            "api_endpoints": [],
+            "relationships": [],
+        }
+        filepath = tmp_path / "vinculum_empty_v11.json"
+        filepath.write_text(json.dumps(data))
+
+        parser = VinculumParser()
+        entities = list(parser.parse(filepath))
+        assert len(entities) == 0
+
+    def test_missing_v11_sections_ok(self, tmp_path: Path):
+        """v1.0 format without new sections should still parse fine."""
+        data = {
+            "format": "vinculum-ariadne-export",
+            "version": "1.0",
+            "hosts": [{"ip": "10.0.0.1"}],
+            "services": [],
+            "vulnerabilities": [],
+            "misconfigurations": [],
+        }
+        filepath = tmp_path / "vinculum_v10.json"
+        filepath.write_text(json.dumps(data))
+
+        parser = VinculumParser()
+        entities = list(parser.parse(filepath))
+        hosts = [e for e in entities if isinstance(e, Host)]
+        assert len(hosts) == 1
+
+    def test_invalid_relationship_type_skipped(self, tmp_path: Path):
+        """Relationships with unknown types should be skipped."""
+        data = {
+            "format": "vinculum-ariadne-export",
+            "version": "1.1",
+            "hosts": [],
+            "services": [],
+            "vulnerabilities": [],
+            "misconfigurations": [],
+            "relationships": [
+                {
+                    "source_key": "a",
+                    "target_key": "b",
+                    "relation_type": "nonexistent_type",
+                },
+            ],
+        }
+        filepath = tmp_path / "vinculum_bad_rel.json"
+        filepath.write_text(json.dumps(data))
+
+        parser = VinculumParser()
+        entities = list(parser.parse(filepath))
+        rels = [e for e in entities if isinstance(e, Relationship)]
+        assert len(rels) == 0

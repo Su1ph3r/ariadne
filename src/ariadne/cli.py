@@ -186,6 +186,42 @@ def export(
     console.print(f"[green]Graph exported to:[/] {output_file}")
 
 
+@app.command(name="export-endpoints")
+def export_endpoints(
+    input_path: Annotated[Path, typer.Argument(help="Path to recon data directory or file")],
+    output: Annotated[
+        Path, typer.Option("--output", "-o", help="Output file path")
+    ] = Path("endpoints.json"),
+    format: Annotated[
+        str, typer.Option("--format", "-f", help="Export format: indago")
+    ] = "indago",
+) -> None:
+    """Export discovered endpoints as targets for Indago API fuzzer."""
+    from ariadne.graph.store import GraphStore
+    from ariadne.parsers.registry import ParserRegistry
+
+    console.print(f"[bold cyan]Ariadne[/] - Exporting endpoints from {input_path}")
+
+    if not input_path.exists():
+        console.print(f"[red]Error:[/] Path does not exist: {input_path}")
+        raise typer.Exit(1)
+
+    if format != "indago":
+        console.print(f"[red]Error:[/] Unsupported format: {format}. Use 'indago'.")
+        raise typer.Exit(1)
+
+    registry = ParserRegistry()
+    store = GraphStore()
+
+    entities = registry.parse_path(input_path)
+    store.build_from_entities(entities)
+
+    from ariadne.exporters.indago import export_indago_targets
+
+    output_file = export_indago_targets(store, output)
+    console.print(f"[green]Endpoints exported to:[/] {output_file}")
+
+
 @parsers_app.command("list")
 def parsers_list() -> None:
     """List all available parsers."""
