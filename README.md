@@ -1,8 +1,8 @@
 # Ariadne
 
-**AI-Powered Attack Path Synthesizer for Penetration Testing and Red Team Operations**
+AI-powered attack path synthesis. Builds a knowledge graph from security tool output and identifies viable attack chains with MITRE ATT&CK mappings.
 
-Ariadne ingests output from security tools, builds a knowledge graph of discovered assets and relationships, and uses AI to synthesize realistic attack paths with MITRE ATT&CK technique mappings.
+Ariadne ingests output from 45+ security tools, builds a knowledge graph of discovered assets and relationships, and uses AI to synthesize realistic attack paths with MITRE ATT&CK technique mappings.
 
 Named after the mythological princess who provided Theseus with the thread to navigate the Labyrinth, Ariadne helps security professionals navigate complex environments by illuminating paths from initial access to high-value targets.
 
@@ -36,7 +36,7 @@ Named after the mythological princess who provided Theseus with the thread to na
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/ariadne.git
+git clone https://github.com/Su1ph3r/ariadne.git
 cd ariadne
 
 # Create virtual environment
