@@ -188,14 +188,26 @@ class CrackMapExecParser(BaseParser):
 
     @classmethod
     def can_parse(cls, file_path: Path) -> bool:
-        """Check if this file is a CrackMapExec JSON file."""
+        """Check if this file is a CrackMapExec JSON file.
+
+        Requires a CME-specific tool token (crackmapexec/netexec/cme/nxc) in
+        the first 2KB. Bare field names like "protocol" or "signing" are far
+        too common in normalized JSON to use as standalone indicators —
+        they were misclaiming files emitted by other tools.
+        """
         if file_path.suffix.lower() != ".json":
             return False
 
+        # Check filename patterns first (cheap)
+        import fnmatch
+        if any(fnmatch.fnmatch(file_path.name, pat) for pat in cls.file_patterns):
+            return True
+
+        # Content-based: require a CME-specific tool token
         try:
             with open(file_path, "rb") as f:
-                header = f.read(2000)
-                indicators = [b"crackmapexec", b"netexec", b"cme", b"nxc", b'"protocol"', b'"signing"', b'"pwned"']
-                return any(ind in header.lower() for ind in indicators)
+                header = f.read(2000).lower()
+            tool_tokens = [b"crackmapexec", b"netexec", b'"cme"', b'"nxc"']
+            return any(tok in header for tok in tool_tokens)
         except Exception:
             return False
